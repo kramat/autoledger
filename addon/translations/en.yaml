@@ -1,0 +1,6 @@
+configuration:
+  log_level:
+    name: Log level
+    description: How much the add-on writes to its log.
+network:
+  8099/tcp: API port for your own scripts. Requires the token from the Settings page.
