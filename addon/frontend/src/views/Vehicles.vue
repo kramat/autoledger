@@ -46,6 +46,8 @@ const fields: Field[] = [
     half: true, show: hasEngine },
   { key: 'tank_l', label: 'Tank size (L)', type: 'number', min: 0, half: true, show: hasEngine },
   { key: 'battery_usable_kwh', label: 'Usable battery (kWh)', type: 'number', min: 0, half: true, show: hasBattery },
+  { key: 'kwh_per_pct', label: 'Wall kWh per battery %', type: 'number', min: 0, step: 'any', show: hasBattery,
+    hint: 'Energy from the wall for 1 % of battery, losses included. 16.5 kWh for a full charge → 0.165. Empty: usable capacity / 90 %.' },
   { key: 'start_date', label: 'Tracking starts on', type: 'date', required: true, half: true,
     hint: 'The earliest date you have data for' },
   { key: 'start_odometer_km', label: 'Odometer on that date (km)', type: 'number', min: 0, required: true, half: true },

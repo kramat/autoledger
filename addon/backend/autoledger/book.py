@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .ledger import ExpenseData, MaintenanceData, OdometerData, RefuelData, VehicleBook
-from .models import Expense, MaintenanceRecord, OdometerReading, Refuel, Vehicle
+from .ledger import ChargeData, ExpenseData, MaintenanceData, OdometerData, RefuelData, VehicleBook
+from .models import ChargeSession, Expense, MaintenanceRecord, OdometerReading, Refuel, Vehicle
 
 
 def today_local(tz: ZoneInfo) -> date:
@@ -29,6 +29,9 @@ def load_book(db: Session, vehicle: Vehicle, tz: ZoneInfo, today: date | None = 
         refuels=[
             RefuelData(r.id, r.ts, r.litres, r.total, r.full_tank, r.odometer_km)
             for r in _active(db, Refuel, vehicle.id)
+        ],
+        charges=[
+            ChargeData(c.start_ts, c.energy_kwh, c.cost) for c in _active(db, ChargeSession, vehicle.id)
         ],
         readings=[OdometerData(r.ts, r.odometer_km) for r in _active(db, OdometerReading, vehicle.id)],
         maintenance=[

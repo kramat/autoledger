@@ -1,11 +1,13 @@
 """Info, health, settings and API token."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .. import API_VERSION, __version__
+from .. import API_VERSION, __version__, discovery
 from ..auth import is_trusted
 from ..db import get_db
+from ..models import IngestEvent
 from ..schemas import SettingsModel
 from ..settings_store import get_settings, regenerate_token, save_settings
 
@@ -25,6 +27,7 @@ def info(request: Request, db: Session = Depends(get_db)):
         "api_version": API_VERSION,
         "currency": get_settings(db).currency,
         "timezone": str(request.app.state.config.tz),
+        "last_ingest_at": db.scalar(select(func.max(IngestEvent.received_at))),
     }
 
 
@@ -53,4 +56,5 @@ def read_token(request: Request):
 def new_token(request: Request):
     _require_trusted(request)
     request.app.state.token = regenerate_token(request.app.state.config.secret_path)
+    discovery.announce(request.app.state.config.port, request.app.state.token)
     return {"token": request.app.state.token}

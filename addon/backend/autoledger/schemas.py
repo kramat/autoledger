@@ -7,7 +7,7 @@ merging it onto the stored record) and an ``*Out`` model.
 import datetime as dt
 from typing import Generic, Literal, TypeVar
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, computed_field, model_validator
 
 VehicleType = Literal["ICE", "PHEV", "BEV"]
 FuelType = Literal["petrol", "diesel", "lpg", "none"]
@@ -60,6 +60,7 @@ class VehicleIn(InModel):
     start_date: dt.date
     purchase_price: float | None = Field(None, ge=0)
     purchase_date: dt.date | None = None
+    kwh_per_pct: float | None = Field(None, gt=0, le=2)
     color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     note: str | None = None
 
@@ -177,6 +178,159 @@ class ExpenseIn(InModel):
 
 class ExpenseOut(ExpenseIn, RecordOut):
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Charging -------------------------------------------------------------
+
+ChargeKind = Literal["home", "public", "manual"]
+PriceMode = Literal["samples", "per_kwh", "total", "free"]
+
+
+class ChargeIn(InModel):
+    vehicle_id: str | None = None
+    kind: ChargeKind = "public"
+    start_ts: AwareDatetime
+    end_ts: AwareDatetime | None = None
+    energy_kwh: float = Field(ge=0)
+    price_mode: PriceMode = "per_kwh"
+    price_per_kwh: float | None = Field(None, ge=0)
+    price_total: float | None = Field(None, ge=0)
+    session_fee: float | None = Field(None, ge=0)
+    soc_start: float | None = Field(None, ge=0, le=100)
+    soc_end: float | None = Field(None, ge=0, le=100)
+    address: str | None = Field(None, max_length=200)
+    provider: str | None = Field(None, max_length=80)
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "ChargeIn":
+        if self.end_ts is not None and self.end_ts < self.start_ts:
+            raise ValueError("The end must be after the start")
+        if self.price_mode == "per_kwh" and self.price_per_kwh is None:
+            raise ValueError("Give a price per kWh, or choose another price mode")
+        if self.price_mode == "total" and self.price_total is None:
+            raise ValueError("Give the total amount, or choose another price mode")
+        if self.price_mode == "samples" and self.kind != "home":
+            raise ValueError("Live pricing is only available for home charging")
+        if self.kind != "home" and self.vehicle_id is None:
+            raise ValueError("Choose a vehicle")
+        return self
+
+
+class ChargeOut(ChargeIn, RecordOut, AutoOut):
+    model_config = ConfigDict(from_attributes=True)
+
+    session_key: str | None = None
+    charger_name: str | None = None
+    is_open: bool
+    energy_estimated: bool
+    auto_cost: float | None = None
+    cost: float
+    lat: float | None = None
+    lon: float | None = None
+
+    @computed_field
+    @property
+    def avg_price(self) -> float | None:
+        return self.cost / self.energy_kwh if self.energy_kwh else None
+
+
+# --- Review inbox ---------------------------------------------------------
+
+
+class ReviewItemOut(RecordOut):
+    vehicle_id: str | None
+    record_type: str | None
+    record_id: str | None
+    reason: str
+    details: dict
+    resolved_at: dt.datetime | None = None
+    resolution: dict | None = None
+    record: dict | None = None  # current state of the record, for quick actions
+
+
+class ResolveIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["update", "accept", "delete", "dismiss"]
+    values: dict = {}
+
+
+# --- Ingest (collector events) --------------------------------------------
+
+
+class Place(BaseModel):
+    lat: float | None = None
+    lon: float | None = None
+    address: str | None = None
+    zone: str | None = None
+
+
+class IngestEventIn(BaseModel):
+    uuid: str = Field(min_length=8, max_length=36)
+    type: str
+    vehicle_id: str | None = None
+    source: str = "collector"
+    collector_version: str | None = None
+    occurred_at: AwareDatetime
+    payload: dict = {}
+
+
+class IngestBatch(BaseModel):
+    events: list[IngestEventIn] = Field(max_length=100)
+
+
+class PriceSample(BaseModel):
+    ts: AwareDatetime
+    kwh: float = Field(ge=0)
+    price: float = Field(ge=0)
+    source: str = "entity"
+
+
+class ChargePayload(BaseModel):
+    session_id: str = Field(min_length=1, max_length=64)
+    charger_key: str | None = None
+    charger_name: str | None = None
+    start_ts: AwareDatetime
+    end_ts: AwareDatetime | None = None
+    energy_kwh: float = Field(ge=0)
+    cost: float | None = Field(None, ge=0)
+    price_samples: list[PriceSample] | None = None
+    soc_start: float | None = Field(None, ge=0, le=100)
+    soc_end: float | None = Field(None, ge=0, le=100)
+
+
+class SocUpdatePayload(BaseModel):
+    session_id: str
+    soc_start: float | None = Field(None, ge=0, le=100)
+    soc_end: float | None = Field(None, ge=0, le=100)
+
+
+class ExternalChargePayload(BaseModel):
+    window_start: AwareDatetime
+    window_end: AwareDatetime
+    place: Place = Place()
+    battery_start_pct: float = Field(ge=0, le=100)
+    battery_end_pct: float = Field(ge=0, le=100)
+    energy_kwh_estimated: float = Field(ge=0)
+    car_reported_charging: bool | None = None
+    flags: list[str] = []
+
+
+class RefuelPayload(BaseModel):
+    ts: AwareDatetime
+    place: Place = Place()
+    odometer_km: float | None = Field(None, ge=0)
+    fuel_start_l: float = Field(ge=0)
+    fuel_end_l: float = Field(ge=0)
+    litres_estimated: float = Field(gt=0)
+    suggested_price_per_l: float | None = Field(None, gt=0)
+    price_source: str | None = None
+
+
+class OdometerPayload(BaseModel):
+    ts: AwareDatetime
+    odometer_km: float = Field(ge=0)
 
 
 # --- Settings -------------------------------------------------------------

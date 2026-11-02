@@ -1,12 +1,14 @@
-"""Routers for vehicles, refuels, odometer readings, maintenance and expenses."""
+"""Routers for vehicles, refuels, odometer readings, charges, maintenance and expenses."""
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..book import load_book
+from ..charging import update_cost
 from ..db import utcnow
-from .crud import crud_router, field_error
+from ..review import resolve_for_record
+from .crud import ResourceSpec, crud_router, field_error
 
 
 def _vehicle_patch(obj: models.Vehicle, current: dict, body: dict) -> None:
@@ -36,6 +38,17 @@ def _refuel_patch(obj: models.Refuel, current: dict, body: dict) -> None:
         current["total"] = None
 
 
+def _confirm_when_edited(fields: set[str]):
+    """An automatic record the user corrects is confirmed and leaves the review inbox."""
+
+    def after_update(db: Session, obj, changed: list[str]) -> None:
+        if obj.status != "ok" and fields & set(changed):
+            obj.status = "ok"
+            resolve_for_record(db, obj.id, {"action": "edited", "fields": changed})
+
+    return after_update
+
+
 def _add_consumption(db: Session, request: Request, items: list[schemas.RefuelOut]) -> None:
     """Attach full-to-full consumption to the refuels that close an interval."""
     tz = request.app.state.config.tz
@@ -51,7 +64,7 @@ def _add_consumption(db: Session, request: Request, items: list[schemas.RefuelOu
             item.l_per_100km = round(interval.l_per_100km, 2)
 
 
-vehicles = crud_router(
+VEHICLES = ResourceSpec(
     prefix="/vehicles",
     tag="vehicles",
     model=models.Vehicle,
@@ -61,7 +74,7 @@ vehicles = crud_router(
     prepare_patch=_vehicle_patch,
 )
 
-refuels = crud_router(
+REFUELS = ResourceSpec(
     prefix="/refuels",
     tag="refuels",
     model=models.Refuel,
@@ -70,10 +83,11 @@ refuels = crud_router(
     order_by=(models.Refuel.ts.desc(),),
     time_field="ts",
     prepare_patch=_refuel_patch,
+    after_update=_confirm_when_edited({"litres", "price_per_l", "total"}),
     decorate_items=_add_consumption,
 )
 
-odometer_readings = crud_router(
+ODOMETER_READINGS = ResourceSpec(
     prefix="/odometer-readings",
     tag="odometer-readings",
     model=models.OdometerReading,
@@ -83,7 +97,21 @@ odometer_readings = crud_router(
     time_field="ts",
 )
 
-maintenance = crud_router(
+CHARGES = ResourceSpec(
+    prefix="/charges",
+    tag="charges",
+    model=models.ChargeSession,
+    schema_in=schemas.ChargeIn,
+    schema_out=schemas.ChargeOut,
+    order_by=(models.ChargeSession.start_ts.desc(),),
+    time_field="start_ts",
+    before_save=update_cost,
+    after_update=_confirm_when_edited(
+        {"vehicle_id", "energy_kwh", "price_mode", "price_per_kwh", "price_total", "session_fee"}
+    ),
+)
+
+MAINTENANCE = ResourceSpec(
     prefix="/maintenance",
     tag="maintenance",
     model=models.MaintenanceRecord,
@@ -93,7 +121,7 @@ maintenance = crud_router(
     time_field="date",
 )
 
-expenses = crud_router(
+EXPENSES = ResourceSpec(
     prefix="/expenses",
     tag="expenses",
     model=models.Expense,
@@ -103,4 +131,9 @@ expenses = crud_router(
     time_field="date",
 )
 
-ROUTERS = (vehicles, refuels, odometer_readings, maintenance, expenses)
+# record_type used by review items -> resource
+BY_RECORD_TYPE = {"refuel": REFUELS, "charge": CHARGES}
+
+ROUTERS = tuple(
+    crud_router(spec) for spec in (VEHICLES, REFUELS, ODOMETER_READINGS, CHARGES, MAINTENANCE, EXPENSES)
+)

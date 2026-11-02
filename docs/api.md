@@ -28,7 +28,7 @@ The add-on serves a versioned JSON API. The collector uses it, the GUI uses it, 
 
 ## Ingest (collector → add-on, M2)
 
-`POST /ingest` takes a batch of up to 100 events. It responds `200 { accepted: [uuid…], duplicates: [uuid…], rejected: [{uuid, error}] }`. A rejected event is logged in the add-on and also creates a review item, so it is never dropped silently.
+`POST /ingest` takes `{ "events": [...] }`, a batch of up to 100 events. It responds `200 { accepted: [{uuid, record_id}], duplicates: [uuid…], rejected: [{uuid, error}] }`. A rejected event is logged in the add-on and also creates a review item, so it is never dropped silently.
 
 Event envelope:
 
@@ -46,12 +46,12 @@ Event envelope:
 
 | `type` | Payload (main fields) |
 |---|---|
-| `trip.recorded` | `start_ts`, `start_ts_estimated`, `end_ts`, `start: {lat, lon, address, zone}`, `end: {…}`, `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`), `battery_start_pct`, `battery_end_pct`, `energy_kwh`, `fuel_start_l`, `fuel_end_l`, `fuel_l`, `kind` |
+| `trip.recorded` *(M3)* | `start_ts`, `start_ts_estimated`, `end_ts`, `start: {lat, lon, address, zone}`, `end: {…}`, `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`), `battery_start_pct`, `battery_end_pct`, `energy_kwh`, `fuel_start_l`, `fuel_end_l`, `fuel_l`, `kind` |
 | `charge.started` / `charge.updated` / `charge.completed` | `session_id`, `charger_id`, `start_ts`, `end_ts`?, `energy_kwh`, `cost`, `price_samples: [{ts, kwh, price}]` (only in `completed`), `soc_start`?, `soc_end`? |
 | `charge.soc_update` | `session_id`, `soc_start`?, `soc_end`?. Sent later, once the cloud car has reported its battery level. |
 | `external_charge.detected` | `window_start`, `window_end`, `place`, `battery_start_pct`, `battery_end_pct`, `energy_kwh_estimated`, `car_reported_charging`, `flags: [...]` |
 | `refuel.detected` | `ts`, `place`, `odometer`, `fuel_start_l`, `fuel_end_l`, `litres_estimated`, `suggested_price_per_l`, `price_source` |
-| `idle.recorded` | `start_ts`, `end_ts`, `battery_delta_pct`, `energy_kwh`, `fuel_l` |
+| `idle.recorded` *(M3)* | `start_ts`, `end_ts`, `battery_delta_pct`, `energy_kwh`, `fuel_l` |
 | `odometer.reading` | `ts`, `odometer_km` |
 
 Ingest rules:
@@ -68,14 +68,14 @@ Each resource supports `GET` (list), `GET /{id}`, `POST`, `PATCH /{id}` and `DEL
 |---|---|---|
 | `/vehicles` | M1 | All vehicles, archived ones included (`archived_at`). `PATCH {"archived": true}` archives. |
 | `/trips` | M3 | `POST /trips/{id}/split {at_km, at_ts}`, `POST /trips/merge {ids:[a,b]}` |
-| `/charges` | M2 | Includes home, public and manual sessions. Filter `?kind=home\|public\|manual`. |
+| `/charges` | M2 | Home, public and manual sessions. `price_mode` is `samples` (priced by the collector), `per_kwh`, `total` or `free`; `cost` is derived from it. |
 | `/refuels` | M1 | List items include `interval_km` and `l_per_100km` on refuels that close a full-to-full interval |
 | `/odometer-readings` | M1 | |
 | `/maintenance` | M1 | Maintenance records (attachments from M5) |
 | `/maintenance-schedules` | M4 | `GET /maintenance-schedules/due?vehicle_id=` gives next due per schedule |
 | `/expenses` | M1 | One-off and recurring |
 | `/attachments` | M5 | `POST` multipart upload. Returns an id to link from records. |
-| `/review-items` | M2 | `POST /review-items/{id}/resolve {action, values}` |
+| `/review-items` | M2 | `GET` lists open items with the current `record`. `POST /review-items/{id}/resolve {action, values}` with action `update` (values are applied like a PATCH), `accept`, `delete` (the record) or `dismiss`. |
 
 ## Derived data
 

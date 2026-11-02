@@ -44,6 +44,14 @@ This was observed in the HA history from 30 Oct to 2 Nov 2026, and it shaped the
 
 → **Snapshot mode** is the right trip mode. Trips are reported per segment, as round trip or one way, with an estimated start time. Optionally, *snapshot boost* can call `lynkco.force_update_data` after the lock changes, to split drives with stops into separate trips. That needs testing for its effect on the 12 V battery and the cloud rate limits.
 
+### Collector setup for the Lynk
+
+**Settings → Devices & services → AutoLedger → Add vehicle**:
+1. Pick *Lynk & Co 01* and the odometer `sensor.lynk_co_l6tcx2e73ne015159_lynk_co_odometer`.
+2. The next step pre-fills the other entities from the same device: trip meter 2, battery, fuel level (litres), latitude/longitude or the device tracker, address, charge state, charger connection status and `last_updated_by_car`.
+
+Set **Wall kWh per battery %** to `0.165` on the add-on's Vehicles page.
+
 ## Shelly EV charger: charger subentry
 
 | Role | Entity | Notes |

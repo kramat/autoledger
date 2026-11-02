@@ -2,7 +2,7 @@
 
 Automatic trip, charging and fuel bookkeeping for Home Assistant, with a web GUI that brings all costs and maintenance for all your cars together.
 
-> **Status: milestone M1.** The add-on works for manual bookkeeping: vehicles, refuels, odometer readings, maintenance, other costs, an overview with monthly costs and CSV export. Automatic tracking through the Collector integration follows in M2/M3, see [docs/roadmap.md](docs/roadmap.md).
+> **Status: milestone M2.** The add-on handles manual bookkeeping, charging and a review inbox. The AutoLedger Collector integration records home charge sessions (priced with your live electricity price), detects refuels and public charging, and keeps odometer readings up to date. Trips follow in M3, see [docs/roadmap.md](docs/roadmap.md).
 
 ## What it does
 
@@ -83,6 +83,18 @@ uv venv .venv && uv pip install -r requirements-dev.txt --python .venv
 ```bash
 .venv/Scripts/python -m pytest
 ```
+
+Collector engine tests (Home Assistant test environment), from the repository root:
+
+```bash
+uv venv .venv-ha --python 3.14 && uv pip install --python .venv-ha pytest-homeassistant-custom-component
+```
+
+```bash
+.venv-ha/Scripts/python -m pytest -p no:homeassistant
+```
+
+(`-p no:homeassistant` because HA's pytest plugin does not run on Windows; on Linux leave it out.)
 
 Frontend (Node 22+), from `addon/frontend`:
 

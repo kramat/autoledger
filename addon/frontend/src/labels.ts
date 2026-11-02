@@ -48,6 +48,27 @@ export const RECURRENCES: Option[] = [
   { value: 'yearly', label: 'Every year' },
 ]
 
+export const CHARGE_KINDS: Option[] = [
+  { value: 'home', label: 'Home' },
+  { value: 'public', label: 'Public' },
+  { value: 'manual', label: 'Other' },
+]
+
+export const PRICE_MODES: Option[] = [
+  { value: 'per_kwh', label: 'Price per kWh' },
+  { value: 'total', label: 'Total amount' },
+  { value: 'free', label: 'Free' },
+  { value: 'samples', label: 'Live electricity price (home charger)' },
+]
+
+export const REVIEW_REASONS: Record<string, string> = {
+  refuel_price: 'Refuel detected: check the litres and enter what you paid',
+  public_charge_price: 'Charge away from home: enter what you paid',
+  possible_engine_charge: 'Battery went up while driving: public charge, or charged by the engine?',
+  charge_without_vehicle: 'Home charge without a vehicle: which car was it?',
+  rejected_event: 'The collector sent data that could not be processed',
+}
+
 export function label(options: Option[], value: string | null | undefined): string {
   return options.find((o) => o.value === (value ?? null))?.label ?? value ?? '—'
 }

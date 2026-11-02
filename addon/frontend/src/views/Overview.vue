@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api, type MonthTotals, type Summary, type VehicleSummary } from '../api'
 import ChartBox from '../components/ChartBox.vue'
-import { fmtDate, fmtMonth, km, money, num } from '../format'
+import { fmtDate, fmtDateTime, fmtMonth, km, money, num } from '../format'
 import { label, VEHICLE_TYPES } from '../labels'
 import { periodRange, state } from '../store'
 import { useTheme } from '../theme'
@@ -16,6 +16,7 @@ async function load(): Promise<void> {
   const { from, to } = periodRange()
   try {
     summary.value = await api.summary({ from, to, vehicle_id: state.vehicleId || undefined })
+    state.reviewCount = summary.value.review_count
     error.value = ''
   } catch (err) {
     error.value = (err as Error).message
@@ -145,6 +146,10 @@ const kmOption = computed(() => {
 
     <template v-else-if="summary">
       <p class="muted small">{{ fmtDate(summary.from) }} – {{ fmtDate(summary.to) }}</p>
+      <router-link v-if="summary.review_count" :to="{ path: '/review', query: $route.query }" class="notice"
+        style="display: block; text-decoration: none">
+        {{ summary.review_count }} {{ summary.review_count === 1 ? 'item needs' : 'items need' }} your input in Review.
+      </router-link>
 
       <div class="grid cols-2">
         <section v-for="v in summary.vehicles" :key="v.vehicle.id" class="card">
@@ -175,7 +180,7 @@ const kmOption = computed(() => {
             <div class="stat" v-if="v.vehicle.type !== 'ICE'">
               <div class="label">Electricity</div>
               <div class="value">{{ money(v.period.electricity_cost) }}</div>
-              <div class="sub">{{ num(v.period.electricity_kwh, 1) }} kWh</div>
+              <div class="sub">{{ num(v.period.electricity_kwh, 1) }} kWh · {{ v.period.charge_count }} charges</div>
             </div>
             <div class="stat">
               <div class="label">Maintenance</div>
@@ -193,6 +198,14 @@ const kmOption = computed(() => {
             · {{ v.rolling_12m.total_cost_per_km == null ? '—' : money(v.rolling_12m.total_cost_per_km, 3) }} / km total
             · {{ v.rolling_12m.energy_cost_per_km == null ? '—' : money(v.rolling_12m.energy_cost_per_km, 3) }} / km energy
             <template v-if="v.rolling_12m.fuel_l_per_100km != null"> · {{ num(v.rolling_12m.fuel_l_per_100km, 1) }} L/100 km</template>
+          </p>
+          <p v-if="v.open_charge" class="small" style="margin: 8px 0 0">
+            <b>Charging now</b> since {{ fmtDateTime(v.open_charge.start_ts) }}: {{ num(v.open_charge.energy_kwh, 2) }} kWh,
+            {{ money(v.open_charge.cost) }}
+          </p>
+          <p v-else-if="v.last_charge" class="small muted" style="margin: 4px 0 0">
+            Last charge {{ fmtDate(v.last_charge.start_ts) }}: {{ num(v.last_charge.energy_kwh, 1) }} kWh for
+            {{ money(v.last_charge.cost) }}
           </p>
           <p v-if="v.last_refuel" class="small muted" style="margin: 4px 0 0">
             Last refuel {{ fmtDate(v.last_refuel.ts) }}: {{ num(v.last_refuel.litres, 1) }} L for {{ money(v.last_refuel.total) }}

@@ -6,6 +6,7 @@ total) always hold.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
@@ -20,8 +21,24 @@ from ..ledger import local_midnight
 from ..models import Vehicle
 from ..schemas import Page
 
-PreparePatch = Callable[[Any, dict, dict], None]
-DecorateItems = Callable[[Session, Request, list], None]
+
+@dataclass(frozen=True)
+class ResourceSpec:
+    prefix: str
+    tag: str
+    model: type
+    schema_in: type[BaseModel]
+    schema_out: type[BaseModel]
+    order_by: tuple
+    time_field: str | None = None
+    # (obj, current values, patch body) -> None; may adjust current/body or obj.
+    prepare_patch: Callable[[Any, dict, dict], None] | None = None
+    # (db, obj) -> None; recalculates derived columns before every save.
+    before_save: Callable[[Session, Any], None] | None = None
+    # (db, obj, changed field names) -> None; runs after a user edit.
+    after_update: Callable[[Session, Any, list[str]], None] | None = None
+    # (db, request, items) -> None; adds derived values to list responses.
+    decorate_items: Callable[[Session, Request, list], None] | None = None
 
 
 def field_error(field: str, message: str) -> RequestValidationError:
@@ -57,19 +74,42 @@ def filtered_query(model, time_field: str | None, request: Request, vehicle_id, 
     return stmt
 
 
-def crud_router(
-    *,
-    prefix: str,
-    tag: str,
-    model,
-    schema_in: type[BaseModel],
-    schema_out: type[BaseModel],
-    order_by: tuple,
-    time_field: str | None = None,
-    prepare_patch: PreparePatch | None = None,
-    decorate_items: DecorateItems | None = None,
-) -> APIRouter:
-    router = APIRouter(prefix=prefix, tags=[tag])
+def patch_object(db: Session, spec: ResourceSpec, obj, body: dict[str, Any]) -> list[str]:
+    """Apply a user edit to ``obj`` (not committed). Returns the changed field names."""
+    current = spec.schema_in.model_validate(obj).model_dump()
+    body = dict(body)
+    if spec.prepare_patch:
+        spec.prepare_patch(obj, current, body)
+    try:
+        new = spec.schema_in.model_validate({**current, **body}).model_dump()
+    except ValidationError as err:
+        raise RequestValidationError(err.errors()) from err
+    check_vehicle(db, new)
+
+    changed = [key for key, value in new.items() if getattr(obj, key) != value]
+    if changed and getattr(obj, "source", "manual") != "manual":
+        # Protect user edits of automatic records from later collector updates.
+        locked = list(obj.locked_fields or [])
+        auto_values = dict(obj.auto_values or {})
+        for key in changed:
+            if key not in locked:
+                locked.append(key)
+                old = getattr(obj, key)
+                auto_values[key] = old.isoformat() if hasattr(old, "isoformat") else old
+        obj.locked_fields, obj.auto_values = locked, auto_values
+    for key in changed:
+        setattr(obj, key, new[key])
+    if spec.before_save:
+        spec.before_save(db, obj)
+    if spec.after_update:
+        spec.after_update(db, obj, changed)
+    obj.version += 1
+    return changed
+
+
+def crud_router(spec: ResourceSpec) -> APIRouter:
+    router = APIRouter(prefix=spec.prefix, tags=[spec.tag])
+    model, schema_in, schema_out, tag = spec.model, spec.schema_in, spec.schema_out, spec.tag
 
     def get_or_404(db: Session, item_id: str):
         obj = db.get(model, item_id)
@@ -88,12 +128,12 @@ def crud_router(
         limit: int = Query(500, ge=1, le=5000),
         offset: int = Query(0, ge=0),
     ):
-        stmt = filtered_query(model, time_field, request, vehicle_id, from_, to, include_deleted)
+        stmt = filtered_query(model, spec.time_field, request, vehicle_id, from_, to, include_deleted)
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-        rows = db.scalars(stmt.order_by(*order_by).limit(limit).offset(offset)).all()
+        rows = db.scalars(stmt.order_by(*spec.order_by).limit(limit).offset(offset)).all()
         items = [schema_out.model_validate(row) for row in rows]
-        if decorate_items:
-            decorate_items(db, request, items)
+        if spec.decorate_items:
+            spec.decorate_items(db, request, items)
         return Page[schema_out](items=items, total=total)
 
     @router.get("/{item_id}", response_model=schema_out, name=f"get_{tag}")
@@ -105,6 +145,8 @@ def crud_router(
         data = body.model_dump()
         check_vehicle(db, data)
         obj = model(**data)
+        if spec.before_save:
+            spec.before_save(db, obj)
         db.add(obj)
         db.commit()
         db.refresh(obj)
@@ -120,31 +162,7 @@ def crud_router(
         obj = get_or_404(db, item_id)
         if if_match is not None and if_match.strip('"') != str(obj.version):
             raise HTTPException(409, "This record was changed in the meantime. Reload and try again.")
-
-        current = schema_in.model_validate(obj).model_dump()
-        body = dict(body)
-        if prepare_patch:
-            prepare_patch(obj, current, body)
-        try:
-            new = schema_in.model_validate({**current, **body}).model_dump()
-        except ValidationError as err:
-            raise RequestValidationError(err.errors()) from err
-        check_vehicle(db, new)
-
-        changed = [key for key, value in new.items() if getattr(obj, key) != value]
-        if changed and getattr(obj, "source", "manual") != "manual":
-            # Protect user edits of automatic records from later collector updates.
-            locked = list(obj.locked_fields or [])
-            auto_values = dict(obj.auto_values or {})
-            for key in changed:
-                if key not in locked:
-                    locked.append(key)
-                    old = getattr(obj, key)
-                    auto_values[key] = old.isoformat() if hasattr(old, "isoformat") else old
-            obj.locked_fields, obj.auto_values = locked, auto_values
-        for key in changed:
-            setattr(obj, key, new[key])
-        obj.version += 1
+        patch_object(db, spec, obj, body)
         db.commit()
         db.refresh(obj)
         return schema_out.model_validate(obj)

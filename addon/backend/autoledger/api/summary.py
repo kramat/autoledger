@@ -12,6 +12,7 @@ from .. import models, schemas
 from ..book import load_book, today_local
 from ..db import get_db
 from ..ledger import PeriodTotals, month_ranges
+from ..review import open_count
 from ..settings_store import get_settings
 
 router = APIRouter(tags=["summary"])
@@ -59,6 +60,14 @@ def summary(
         monthly_totals.append(monthly)
 
         latest = book.latest_odometer
+        charges = db.scalars(
+            select(models.ChargeSession)
+            .where(models.ChargeSession.vehicle_id == vehicle.id, models.ChargeSession.deleted_at.is_(None))
+            .order_by(models.ChargeSession.start_ts.desc())
+            .limit(5)
+        ).all()
+        open_charge = next((c for c in charges if c.is_open), None)
+        last_charge = next((c for c in charges if not c.is_open), None)
         last_refuel = db.scalars(
             select(models.Refuel)
             .where(models.Refuel.vehicle_id == vehicle.id, models.Refuel.deleted_at.is_(None))
@@ -74,6 +83,8 @@ def summary(
                 "odometer_ts": latest.ts if latest else None,
                 "odometer_points_ignored": book.dropped_points,
                 "last_refuel": schemas.RefuelOut.model_validate(last_refuel) if last_refuel else None,
+                "open_charge": schemas.ChargeOut.model_validate(open_charge) if open_charge else None,
+                "last_charge": schemas.ChargeOut.model_validate(last_charge) if last_charge else None,
                 "monthly": _monthly(ranges, monthly),
             }
         )
@@ -83,6 +94,7 @@ def summary(
         "from": from_,
         "to": to,
         "currency": get_settings(db).currency,
+        "review_count": open_count(db),
         "vehicles": result_vehicles,
         "combined": {
             "period": reduce(add, period_totals, PeriodTotals()).as_dict(),

@@ -31,6 +31,7 @@ export const state = reactive({
   customFrom: '',
   customTo: '',
   toasts: [] as Toast[],
+  reviewCount: 0,
   loadError: '',
 })
 
@@ -67,6 +68,10 @@ export function periodRange(): { from: string; to: string } {
 export async function loadVehicles(): Promise<void> {
   state.vehicles = (await api.list<Vehicle>('vehicles')).items
   if (state.vehicleId && !state.vehicles.some((v) => v.id === state.vehicleId)) state.vehicleId = ''
+}
+
+export async function loadReviewCount(): Promise<void> {
+  state.reviewCount = (await api.reviewItems()).total
 }
 
 export async function loadSettings(): Promise<void> {

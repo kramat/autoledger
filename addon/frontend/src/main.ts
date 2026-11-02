@@ -3,6 +3,8 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import Overview from './views/Overview.vue'
 import Fuel from './views/Fuel.vue'
+import Charging from './views/Charging.vue'
+import Review from './views/Review.vue'
 import Maintenance from './views/Maintenance.vue'
 import Costs from './views/Costs.vue'
 import Vehicles from './views/Vehicles.vue'
@@ -15,6 +17,8 @@ const router = createRouter({
   routes: [
     { path: '/', component: Overview },
     { path: '/fuel', component: Fuel },
+    { path: '/charging', component: Charging },
+    { path: '/review', component: Review },
     { path: '/maintenance', component: Maintenance },
     { path: '/costs', component: Costs },
     { path: '/vehicles', component: Vehicles },

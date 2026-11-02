@@ -14,7 +14,7 @@ The add-on holds every record, calculates every cost and offers the web GUI. It 
 | Page | Available |
 |---|---|
 | Overview, Fuel (refuels + odometer readings), Maintenance (log), Costs, Vehicles, Settings, CSV export | **M1** (built) |
-| Charging, Review inbox | M2 |
+| Charging, Review inbox | **M2** (built) |
 | Trips | M3 |
 | Maintenance schedules and reminders, Reports, XLSX, JSON backup, CSV import | M4 |
 | Attachments, depreciation | M5 |

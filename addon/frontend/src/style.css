@@ -124,6 +124,20 @@ a {
   color: var(--text);
 }
 
+.tab .count {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
 .tab.active {
   color: var(--text);
   border-bottom-color: var(--accent);

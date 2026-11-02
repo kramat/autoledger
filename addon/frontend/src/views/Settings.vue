@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { api, ApiError, type Info, type Resource, type Settings } from '../api'
+import { fmtDateTime } from '../format'
 import { state, toast } from '../store'
 
 const form = reactive<Settings>(JSON.parse(JSON.stringify(state.settings)))
@@ -16,6 +17,7 @@ const exports: { resource: Resource; label: string }[] = [
   { resource: 'vehicles', label: 'Vehicles' },
   { resource: 'refuels', label: 'Refuels' },
   { resource: 'odometer-readings', label: 'Odometer readings' },
+  { resource: 'charges', label: 'Charges' },
   { resource: 'maintenance', label: 'Maintenance' },
   { resource: 'expenses', label: 'Other costs' },
 ]
@@ -124,6 +126,14 @@ onMounted(async () => {
           </button>
         </div>
       </template>
+    </section>
+
+    <section v-if="info" class="card">
+      <h2>Collector</h2>
+      <p class="small muted" style="margin-bottom: 0">
+        <template v-if="info.last_ingest_at">Last data from the AutoLedger Collector: {{ fmtDateTime(info.last_ingest_at) }}.</template>
+        <template v-else>The AutoLedger Collector has not sent any data yet. Install it via HACS and add the integration.</template>
+      </p>
     </section>
 
     <section v-if="info" class="card small muted">

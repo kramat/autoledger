@@ -5,3 +5,4 @@ __pycache__/
 node_modules/
 addon/frontend/dist/
 /dev-data/
+.venv-ha/

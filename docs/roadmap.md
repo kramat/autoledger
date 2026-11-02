@@ -5,7 +5,7 @@ Each milestone ends with something usable. The manual workflow comes first, so t
 | Milestone | Scope | Done when |
 |---|---|---|
 | **M1: Add-on core** ✅ built | Add-on skeleton (Ingress, `/data`, migrations), vehicles, refuels, odometer readings, maintenance log, expenses, overview + fuel + maintenance pages, cost engine for refuels, CSV export | The VW Up's refuels and maintenance can be logged and give L/100 km, €/km and monthly costs |
-| **M2: Collector, charging & fuel** | Collector config flow (discovery + manual), vehicle and charger subentries, snapshot builder, home charge detector with per-increment pricing, refuel and external charge detection, outbox, ingest API, review inbox, summary sensors | A night charge on the Shelly shows up with correct kWh and € even when the power sensor flaps. A refuel of the Lynk ends up in the review inbox. |
+| **M2: Collector, charging & fuel** ✅ built | Collector config flow (discovery + manual), vehicle and charger subentries, snapshot builder, home charge detector with per-increment pricing, refuel and external charge detection, outbox, ingest API, review inbox, summary sensors | A night charge on the Shelly shows up with correct kWh and € even when the power sensor flaps. A refuel of the Lynk ends up in the review inbox. |
 | **M3: Trips** | Trip detector (snapshot mode), idle records, kWh-per-% learning, battery/tank cost basis, trips page with map, merge/split, backfill service | Every Lynk drive appears with km, kWh, L and €. The 2 Nov example reproduces the numbers in [costs.md](costs.md#worked-example-lynk--co-2-nov-2026). |
 | **M4: Insight** | Reports (period, compare, trends), maintenance schedules and reminders, fuel reconciliation, XLSX export, JSON backup/restore, CSV import | Year report for both cars, and maintenance reminders as HA sensors |
 | **M5: Extras** | Snapshot boost, live trip mode, receipt photo attachments, recurring expenses + depreciation, fuel price entity support | — |
@@ -27,6 +27,34 @@ Each milestone ends with something usable. The manual workflow comes first, so t
   - the image has not been built by a real Supervisor yet; that happens on first install;
   - no CSV import yet (M4), so old data is entered by hand with back-dated dates;
   - maintenance schedules and reminders follow in M4.
+
+## M2 as built (2 Nov 2026)
+
+- **Add-on 0.2.0:**
+  - migration 0002 (charge sessions, review items, ingest log, `kwh_per_pct`);
+  - `POST /ingest`, idempotent by uuid, each event in its own savepoint, rejected events kept and put in review;
+  - charge pricing modes;
+  - review inbox with quick actions, where an edited automatic record confirms itself;
+  - electricity in the totals;
+  - Supervisor discovery announcement;
+  - GUI: Charging and Review pages, an inbox counter, the live session on the overview, and wall kWh per % on vehicles.
+- **Collector 0.2.0** (`custom_components/autoledger`):
+  - config flow with discovery, manual URL suggestion, reconfigure and reauth;
+  - vehicle and charger subentries, with entity suggestions from the odometer's device;
+  - snapshot engine with sanitizing;
+  - refuel, public charge and odometer detection;
+  - home charge sessions from the kWh counter, priced per increment, persisted across restarts;
+  - battery % at start from snapshot history and at the end from the car's next report;
+  - persisted outbox with backoff and a Repair issue after 24 h;
+  - summary sensors for every add-on vehicle, live charger entities, services, events and diagnostics.
+- **Tests:**
+  - 43 add-on tests and 25 Collector engine tests;
+  - plus an end-to-end run in a real Home Assistant 2026.10.4 core against the dev add-on: config flow, both subentries, a night charge with a flapping power sensor, a refuel, discovery, a service call and diagnostics.
+
+  HA's pytest plugin does not run on Windows, so config-flow unit tests for CI follow later.
+- **Not verified yet:**
+  - whether the Supervisor routes the `autoledger` discovery to a custom integration (if not, the manual setup with the suggested URL works);
+  - behaviour on the real Lynk and Shelly data over a few days.
 
 ## Quality bar (all milestones)
 

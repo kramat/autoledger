@@ -45,6 +45,10 @@ Two of `litres`, `price_per_l` and `total` are given, and the third is calculate
 
 For a detected refuel, the suggested `price_per_l` comes from the fuel price entity or the previous refuel. It stays marked *estimated* until you confirm it.
 
+## Until trips exist (M2)
+
+Without trips there is nothing to spread energy over yet. Electricity is therefore counted like fuel for a manual vehicle: on a **purchase basis**, in the period the charge started. A running session counts with its energy and cost so far. The battery and tank cost basis below replaces this in M3.
+
 ## Battery and tank cost basis
 
 A car stores energy you paid for at different prices. AutoLedger keeps two *pools* per vehicle, each with a **weighted average cost**.

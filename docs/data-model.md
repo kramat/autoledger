@@ -25,7 +25,7 @@ Records that can be created automatically also have:
 
 Money (in the currency from Settings) and quantities are stored as `REAL`. Derived values are rounded on calculation (litres 3 decimals, prices 4, totals 2), and figures are rounded again for display. Timestamps are fixed-width UTC strings (`2026-11-02T12:42:56.941000Z`), so sorting the text sorts by time.
 
-Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance_records`, `expenses` and `settings`. The other tables arrive with their milestone, each through its own Alembic migration.
+Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance_records`, `expenses` and `settings`. Added in **M2** (migration 0002): `charge_sessions`, `review_items`, `ingest_events`, plus `vehicles.kwh_per_pct`. The other tables arrive with their milestone, each through its own Alembic migration.
 
 ## Tables
 
@@ -38,14 +38,8 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 ### `idle_records`
 `vehicle_id`, `start_ts`, `end_ts`, `battery_delta_pct`, `energy_kwh`, `fuel_l`
 
-### `chargers`
-`name`, `ha_device_id`, `default_vehicle_id`, `fixed_price`
-
 ### `charge_sessions`
-`vehicle_id` (NULL until assigned), `charger_id` (NULL for public/manual), `session_key` (the collector's `session_id`, unique), `kind` (`home`/`public`/`manual`), `start_ts`, `end_ts`, `is_open`, `lat`, `lon`, `address`, `provider`, `energy_kwh`, `energy_estimated`, `soc_start`, `soc_end`, `price_mode` (`samples`/`per_kwh`/`total`/`free`), `price_per_kwh`, `session_fee`, `cost`, `auto_cost`
-
-### `charge_price_samples`
-`session_id`, `ts`, `kwh`, `price`, `price_source` (`entity`/`fixed`/`fallback`)
+`vehicle_id` (NULL until assigned), `session_key` (the collector's `session_id`, unique), `kind` (`home`/`public`/`manual`), `charger_key`, `charger_name`, `start_ts`, `end_ts`, `is_open`, `lat`, `lon`, `address`, `provider`, `energy_kwh`, `energy_estimated`, `soc_start`, `soc_end`, `price_mode` (`samples`/`per_kwh`/`total`/`free`), `price_per_kwh`, `price_total`, `session_fee`, `auto_cost` (the collector's), `cost` (effective), `price_samples` (JSON: ts, kWh, price, source), `note`
 
 ### `refuels`
 `vehicle_id`, `ts`, `odometer_km`, `litres`, `price_per_l`, `total`, `full_tank`, `station`, `lat`, `lon`, `fuel_type`, `attachment_id`
@@ -69,7 +63,7 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 `vehicle_id`, `record_type`, `record_id`, `reason`, `details` (JSON), `resolved_at`, `resolution` (JSON)
 
 ### `ingest_events`
-`uuid` (unique), `type`, `vehicle_id`, `occurred_at`, `received_at`, `payload` (JSON), `result` (`applied`/`duplicate`/`rejected`), `error`. This is the audit log, kept for 1 year by default.
+`uuid` (primary key), `type`, `vehicle_id`, `occurred_at`, `received_at`, `payload` (JSON), `result` (`applied`/`rejected`), `record_id`, `error`. This is the audit log, kept for 1 year by default.
 
 ### `ledger_states`
 `vehicle_id`, `record_type`, `record_id`, `ts`, `pool_kwh`, `pool_cost`, `tank_l`, `tank_cost`, `electricity_cost`, `fuel_cost`. These are the cached replay states (see [costs.md](costs.md#recalculation)).
@@ -85,7 +79,6 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 ```
 vehicles 1─* trips, idle_records, charge_sessions, refuels, odometer_readings,
              maintenance_records, maintenance_schedules, expenses, efficiency_factors, ledger_states
-chargers 1─* charge_sessions ─* charge_price_samples
 maintenance_schedules 1─* maintenance_records
 attachments *─ refuels, maintenance_records, expenses
 review_items ─ any record (record_type + record_id)

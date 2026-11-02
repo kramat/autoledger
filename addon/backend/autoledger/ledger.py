@@ -26,6 +26,13 @@ class RefuelData:
 
 
 @dataclass(frozen=True)
+class ChargeData:
+    start_ts: datetime
+    energy_kwh: float
+    cost: float
+
+
+@dataclass(frozen=True)
 class OdometerData:
     ts: datetime
     odometer_km: float
@@ -80,6 +87,7 @@ class PeriodTotals:
     maintenance_cost: float = 0.0
     other_cost: float = 0.0
     refuel_count: int = 0
+    charge_count: int = 0
     maintenance_count: int = 0
     # Full-to-full intervals that end in the period, for L/100 km.
     interval_l: float = 0.0
@@ -118,6 +126,7 @@ class PeriodTotals:
             maintenance_cost=self.maintenance_cost + other.maintenance_cost,
             other_cost=self.other_cost + other.other_cost,
             refuel_count=self.refuel_count + other.refuel_count,
+            charge_count=self.charge_count + other.charge_count,
             maintenance_count=self.maintenance_count + other.maintenance_count,
             interval_l=self.interval_l + other.interval_l,
             interval_km=self.interval_km + other.interval_km,
@@ -142,6 +151,7 @@ class PeriodTotals:
             "total_cost_per_km": r(self.total_cost_per_km, 3),
             "fuel_l_per_100km": r(self.fuel_l_per_100km, 2),
             "refuel_count": self.refuel_count,
+            "charge_count": self.charge_count,
             "maintenance_count": self.maintenance_count,
             "distance_known_until": self.distance_known_until,
         }
@@ -289,6 +299,7 @@ class VehicleBook:
         start_date: date,
         start_odometer_km: float,
         refuels: Iterable[RefuelData] = (),
+        charges: Iterable[ChargeData] = (),
         readings: Iterable[OdometerData] = (),
         maintenance: Iterable[MaintenanceData] = (),
         expenses: Iterable[ExpenseData] = (),
@@ -296,6 +307,7 @@ class VehicleBook:
         self.tz = tz
         self.today = today
         self.refuels = sorted(refuels, key=lambda r: r.ts)
+        self.charges = list(charges)
         self.maintenance = list(maintenance)
         self.expenses = list(expenses)
 
@@ -329,6 +341,12 @@ class VehicleBook:
                 totals.fuel_l += refuel.litres
                 totals.fuel_cost += refuel.total
                 totals.refuel_count += 1
+        # Until trips exist (M3), electricity is counted when it is charged.
+        for charge in self.charges:
+            if start_ts <= charge.start_ts < end_ts:
+                totals.electricity_kwh += charge.energy_kwh
+                totals.electricity_cost += charge.cost
+                totals.charge_count += 1
         for interval in self.intervals:
             if start_ts <= interval.end < end_ts:
                 totals.interval_l += interval.litres

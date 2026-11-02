@@ -22,13 +22,16 @@ RESOURCES = {
     "odometer-readings": (
         models.OdometerReading, schemas.OdometerIn, schemas.OdometerOut, "ts", models.OdometerReading.ts,
     ),
+    "charges": (
+        models.ChargeSession, schemas.ChargeIn, schemas.ChargeOut, "start_ts", models.ChargeSession.start_ts,
+    ),
     "maintenance": (
         models.MaintenanceRecord, schemas.MaintenanceIn, schemas.MaintenanceOut, "date", models.MaintenanceRecord.date,
     ),
     "expenses": (models.Expense, schemas.ExpenseIn, schemas.ExpenseOut, "date", models.Expense.date),
 }
 # Record fields after the user-facing ones, when the resource has them.
-TRAILING_COLUMNS = ("archived_at", "source", "status", "id", "created_at", "updated_at")
+TRAILING_COLUMNS = ("cost", "auto_cost", "charger_name", "archived_at", "source", "status", "id", "created_at", "updated_at")
 
 
 @router.get("/{resource}.csv")

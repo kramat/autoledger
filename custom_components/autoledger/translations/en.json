@@ -1,0 +1,267 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Connect to the AutoLedger add-on",
+        "description": "Install and start the AutoLedger add-on first. The token is on the add-on's Settings page.",
+        "data": {
+          "url": "Add-on URL",
+          "token": "API token"
+        },
+        "data_description": {
+          "url": "Usually http://<something>-autoledger:8099. The suggestion is taken from your installed add-ons."
+        }
+      },
+      "hassio_confirm": {
+        "title": "AutoLedger add-on found",
+        "description": "Connect Home Assistant to the AutoLedger add-on? Afterwards, add your cars and home charger on the integration page."
+      },
+      "reconfigure": {
+        "title": "Connection to the AutoLedger add-on",
+        "data": {
+          "url": "Add-on URL",
+          "token": "API token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "New API token needed",
+        "description": "The add-on refused the token, for example because a new one was created. Copy the token from the add-on's Settings page.",
+        "data": {
+          "token": "API token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the AutoLedger add-on at this URL.",
+      "invalid_auth": "The add-on refused this token."
+    },
+    "abort": {
+      "already_configured": "AutoLedger is already set up.",
+      "reconfigure_successful": "Connection updated.",
+      "reauth_successful": "Token updated."
+    }
+  },
+  "config_subentries": {
+    "vehicle": {
+      "entry_type": "Vehicle",
+      "initiate_flow": {
+        "user": "Add vehicle",
+        "reconfigure": "Change entities"
+      },
+      "step": {
+        "user": {
+          "title": "Which car?",
+          "description": "Pick the vehicle from the AutoLedger add-on and its odometer sensor. The next step suggests the other entities of the same device.",
+          "data": {
+            "vehicle_id": "Vehicle in AutoLedger",
+            "odometer": "Odometer"
+          }
+        },
+        "entities": {
+          "title": "Entities of {vehicle}",
+          "description": "Everything except the odometer is optional, but each entity adds detections: fuel level for refuels, battery level for public charging, location for places.",
+          "data": {
+            "trip_meter": "Trip meter (0.1 km precision)",
+            "battery_level": "Battery level (%)",
+            "fuel_level": "Fuel level",
+            "fuel_unit": "Fuel level unit",
+            "tracker": "Device tracker",
+            "latitude": "Latitude (if there is no device tracker)",
+            "longitude": "Longitude (if there is no device tracker)",
+            "address": "Address",
+            "charging_state": "Charging state",
+            "plug_state": "Charging cable connected",
+            "car_timestamp": "Time the car last reported"
+          },
+          "data_description": {
+            "car_timestamp": "Cloud-connected cars report with a delay. With this, records get the car's own time.",
+            "fuel_unit": "Litres, or % of the tank (the tank size from the add-on is used to convert)."
+          },
+          "sections": {
+            "thresholds": {
+              "name": "Detection thresholds",
+              "data": {
+                "refuel_min_l": "Refuel when the tank rises at least",
+                "external_charge_min_pct": "Public charge when the battery rises at least"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Entities of {vehicle}",
+          "data": {
+            "odometer": "Odometer",
+            "trip_meter": "Trip meter (0.1 km precision)",
+            "battery_level": "Battery level (%)",
+            "fuel_level": "Fuel level",
+            "fuel_unit": "Fuel level unit",
+            "tracker": "Device tracker",
+            "latitude": "Latitude (if there is no device tracker)",
+            "longitude": "Longitude (if there is no device tracker)",
+            "address": "Address",
+            "charging_state": "Charging state",
+            "plug_state": "Charging cable connected",
+            "car_timestamp": "Time the car last reported"
+          },
+          "sections": {
+            "thresholds": {
+              "name": "Detection thresholds",
+              "data": {
+                "refuel_min_l": "Refuel when the tank rises at least",
+                "external_charge_min_pct": "Public charge when the battery rises at least"
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "The AutoLedger integration is not running. Check the connection to the add-on first.",
+        "cannot_connect": "Cannot reach the AutoLedger add-on.",
+        "no_vehicles": "All vehicles of the add-on are already linked. Add a vehicle in the AutoLedger panel first.",
+        "reconfigure_successful": "Vehicle updated."
+      }
+    },
+    "charger": {
+      "entry_type": "Home charger",
+      "initiate_flow": {
+        "user": "Add home charger",
+        "reconfigure": "Change charger"
+      },
+      "step": {
+        "user": {
+          "title": "Home charger",
+          "description": "Charge sessions are measured with the charger's total energy counter and priced per kWh with your electricity price.",
+          "data": {
+            "name": "Name",
+            "energy": "Energy counter (kWh, total)",
+            "vehicle_subentry": "Car that charges here",
+            "price": "Electricity price sensor",
+            "fixed_price": "Fixed price per kWh (if there is no price sensor)",
+            "power": "Power",
+            "switch": "Switch"
+          },
+          "data_description": {
+            "power": "Optional. Only used to notice the end of a session sooner; energy always comes from the counter.",
+            "price": "For example your dynamic tariff. When it is unavailable, the fixed price or the add-on's fallback price is used."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Session detection",
+              "data": {
+                "start_w": "Charging above",
+                "stop_w": "Not charging below",
+                "min_session_kwh": "Ignore sessions smaller than"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Home charger",
+          "data": {
+            "name": "Name",
+            "energy": "Energy counter (kWh, total)",
+            "vehicle_subentry": "Car that charges here",
+            "price": "Electricity price sensor",
+            "fixed_price": "Fixed price per kWh (if there is no price sensor)",
+            "power": "Power",
+            "switch": "Switch"
+          },
+          "sections": {
+            "advanced": {
+              "name": "Session detection",
+              "data": {
+                "start_w": "Charging above",
+                "stop_w": "Not charging below",
+                "min_session_kwh": "Ignore sessions smaller than"
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "The AutoLedger integration is not running. Check the connection to the add-on first.",
+        "reconfigure_successful": "Charger updated."
+      }
+    }
+  },
+  "selector": {
+    "fuel_unit": {
+      "options": {
+        "L": "Litres",
+        "%": "% of the tank"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cost_this_month": { "name": "Cost this month" },
+      "energy_cost_this_month": { "name": "Energy cost this month" },
+      "distance_this_month": { "name": "Distance this month" },
+      "electricity_this_month": { "name": "Electricity this month" },
+      "fuel_this_month": { "name": "Fuel this month" },
+      "cost_per_km": { "name": "Energy cost per km" },
+      "total_cost_per_km": { "name": "Total cost per km" },
+      "fuel_consumption": { "name": "Fuel consumption" },
+      "last_charge": { "name": "Last charge" },
+      "odometer": { "name": "Odometer" },
+      "review_items": { "name": "Items to review" },
+      "session_energy": { "name": "Session energy" },
+      "session_cost": { "name": "Session cost" }
+    },
+    "binary_sensor": {
+      "session_active": { "name": "Charging" }
+    }
+  },
+  "issues": {
+    "addon_unreachable": {
+      "title": "AutoLedger add-on unreachable",
+      "description": "{count} records are waiting because the add-on cannot be reached ({error}). They are kept and delivered as soon as it is running again. Check that the add-on is started."
+    }
+  },
+  "exceptions": {
+    "not_loaded": { "message": "The AutoLedger Collector is not set up." },
+    "not_a_vehicle": { "message": "Pick an AutoLedger vehicle." }
+  },
+  "services": {
+    "add_refuel": {
+      "name": "Add refuel",
+      "description": "Adds a refuel to AutoLedger. Give two of litres, total and price per litre.",
+      "fields": {
+        "vehicle": { "name": "Vehicle", "description": "The AutoLedger vehicle." },
+        "litres": { "name": "Litres", "description": "Litres from the receipt." },
+        "total": { "name": "Total", "description": "Amount paid." },
+        "price_per_l": { "name": "Price per litre", "description": "Price per litre." },
+        "odometer": { "name": "Odometer", "description": "Odometer at the time of the refuel, for L/100 km." },
+        "full_tank": { "name": "Full tank", "description": "The tank was filled completely." },
+        "station": { "name": "Station", "description": "Name or place of the station." },
+        "timestamp": { "name": "Time", "description": "When it happened. Default: now." }
+      }
+    },
+    "add_charge": {
+      "name": "Add charge",
+      "description": "Adds a charge away from home to AutoLedger.",
+      "fields": {
+        "vehicle": { "name": "Vehicle", "description": "The AutoLedger vehicle." },
+        "energy_kwh": { "name": "Energy", "description": "kWh charged." },
+        "total": { "name": "Total", "description": "Amount paid. Leave empty to use the price per kWh." },
+        "price_per_kwh": { "name": "Price per kWh", "description": "Price per kWh." },
+        "location": { "name": "Location", "description": "Where you charged." },
+        "timestamp": { "name": "Time", "description": "When the charge started. Default: now." }
+      }
+    },
+    "add_odometer": {
+      "name": "Add odometer reading",
+      "description": "Adds an odometer reading to AutoLedger.",
+      "fields": {
+        "vehicle": { "name": "Vehicle", "description": "The AutoLedger vehicle." },
+        "odometer": { "name": "Odometer", "description": "Odometer value in km." },
+        "timestamp": { "name": "Time", "description": "When it was read. Default: now." }
+      }
+    },
+    "resync": {
+      "name": "Resync",
+      "description": "Sends waiting records to the add-on now and refreshes the sensors."
+    }
+  }
+}

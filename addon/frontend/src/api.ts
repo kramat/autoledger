@@ -29,6 +29,7 @@ export interface Vehicle extends RecordBase {
   start_date: string
   purchase_price: number | null
   purchase_date: string | null
+  kwh_per_pct: number | null
   color: string | null
   note: string | null
   archived_at: string | null
@@ -48,6 +49,45 @@ export interface Refuel extends RecordBase {
   status: string
   interval_km: number | null
   l_per_100km: number | null
+}
+
+export type PriceMode = 'samples' | 'per_kwh' | 'total' | 'free'
+
+export interface Charge extends RecordBase {
+  vehicle_id: string | null
+  kind: 'home' | 'public' | 'manual'
+  start_ts: string
+  end_ts: string | null
+  energy_kwh: number
+  price_mode: PriceMode
+  price_per_kwh: number | null
+  price_total: number | null
+  session_fee: number | null
+  soc_start: number | null
+  soc_end: number | null
+  address: string | null
+  provider: string | null
+  note: string | null
+  source: string
+  status: string
+  locked_fields: string[]
+  session_key: string | null
+  charger_name: string | null
+  is_open: boolean
+  energy_estimated: boolean
+  auto_cost: number | null
+  cost: number
+  avg_price: number | null
+}
+
+export interface ReviewItem extends RecordBase {
+  vehicle_id: string | null
+  record_type: 'refuel' | 'charge' | null
+  record_id: string | null
+  reason: string
+  details: Record<string, unknown>
+  resolved_at: string | null
+  record: (Refuel & Charge) | null
 }
 
 export interface OdometerReading extends RecordBase {
@@ -99,6 +139,7 @@ export interface Totals {
   total_cost_per_km: number | null
   fuel_l_per_100km: number | null
   refuel_count: number
+  charge_count: number
   maintenance_count: number
   distance_known_until: string | null
 }
@@ -115,6 +156,8 @@ export interface VehicleSummary {
   odometer_ts: string | null
   odometer_points_ignored: number
   last_refuel: Refuel | null
+  open_charge: Charge | null
+  last_charge: Charge | null
   monthly: MonthTotals[]
 }
 
@@ -122,6 +165,7 @@ export interface Summary {
   from: string
   to: string
   currency: string
+  review_count: number
   vehicles: VehicleSummary[]
   combined: { period: Totals; monthly: MonthTotals[] }
 }
@@ -132,6 +176,7 @@ export interface Info {
   api_version: number
   currency: string
   timezone: string
+  last_ingest_at: string | null
 }
 
 export interface Page<T> {
@@ -139,7 +184,7 @@ export interface Page<T> {
   total: number
 }
 
-export type Resource = 'vehicles' | 'refuels' | 'odometer-readings' | 'maintenance' | 'expenses'
+export type Resource = 'vehicles' | 'refuels' | 'odometer-readings' | 'charges' | 'maintenance' | 'expenses'
 
 export class ApiError extends Error {
   constructor(
@@ -182,6 +227,9 @@ export const api = {
   update: <T>(resource: Resource, id: string, body: object) => request<T>('PATCH', `/${resource}/${id}`, body),
   remove: (resource: Resource, id: string) => request<void>('DELETE', `/${resource}/${id}`),
   restore: <T>(resource: Resource, id: string) => request<T>('POST', `/${resource}/${id}/restore`),
+  reviewItems: () => request<Page<ReviewItem>>('GET', '/review-items'),
+  resolve: (id: string, action: 'update' | 'accept' | 'delete' | 'dismiss', values: object = {}) =>
+    request<ReviewItem>('POST', `/review-items/${id}/resolve`, { action, values }),
   summary: (params: Params) => request<Summary>('GET', '/summary', undefined, params),
   info: () => request<Info>('GET', '/info'),
   settings: () => request<Settings>('GET', '/settings'),

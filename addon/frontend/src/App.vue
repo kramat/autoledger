@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from './api'
 import { setCurrency } from './format'
-import { PRESETS, activeVehicles, dismissToast, loadSettings, loadVehicles, state, type Preset } from './store'
+import {
+  PRESETS,
+  activeVehicles,
+  dismissToast,
+  loadReviewCount,
+  loadSettings,
+  loadVehicles,
+  state,
+  type Preset,
+} from './store'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,8 +21,10 @@ const ready = ref(false)
 const tabs = [
   { to: '/', label: 'Overview' },
   { to: '/fuel', label: 'Fuel' },
+  { to: '/charging', label: 'Charging' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/costs', label: 'Costs' },
+  { to: '/review', label: 'Review' },
   { to: '/vehicles', label: 'Vehicles' },
   { to: '/settings', label: 'Settings' },
 ]
@@ -50,7 +61,7 @@ onMounted(async () => {
   await router.isReady()
   readQuery()
   try {
-    await Promise.all([loadVehicles(), loadSettings()])
+    await Promise.all([loadVehicles(), loadSettings(), loadReviewCount()])
   } catch (err) {
     state.loadError =
       err instanceof ApiError && err.status === 401
@@ -58,7 +69,12 @@ onMounted(async () => {
         : `Could not reach the AutoLedger API: ${(err as Error).message}`
   }
   ready.value = true
+  // New collector data (a detected refuel, a finished charge) can arrive at any time.
+  reviewTimer = window.setInterval(() => loadReviewCount().catch(() => undefined), 60000)
 })
+
+let reviewTimer: number | undefined
+onBeforeUnmount(() => window.clearInterval(reviewTimer))
 </script>
 
 <template>
@@ -83,7 +99,8 @@ onMounted(async () => {
     </div>
     <nav class="tabs" aria-label="Sections">
       <router-link v-for="t in tabs" :key="t.to" :to="{ path: t.to, query: route.query }" class="tab"
-        :class="{ active: route.path === t.to }">{{ t.label }}</router-link>
+        :class="{ active: route.path === t.to }">{{ t.label }}<span v-if="t.to === '/review' && state.reviewCount"
+          class="count">{{ state.reviewCount }}</span></router-link>
     </nav>
   </header>
 

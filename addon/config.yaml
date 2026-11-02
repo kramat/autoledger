@@ -1,5 +1,5 @@
 name: AutoLedger
-version: "0.1.0"
+version: "0.2.0"
 slug: autoledger
 description: Trip, charging, fuel, maintenance and cost bookkeeping for your cars
 url: https://github.com/kramat/autoledger
@@ -14,6 +14,8 @@ ingress_port: 8099
 panel_icon: mdi:car-cog
 panel_title: AutoLedger
 watchdog: http://[HOST]:[PORT:8099]/api/v1/health
+discovery:
+  - autoledger
 ports:
   8099/tcp: null
 ports_description:
