@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Fuel gauge noise is smoothed: between refuels the tank level can only go down, so a dip that comes
+  back on the next report is handed back instead of being charged. Noise no longer adds up between refuels.
+- The correction at a full tank goes to the trips that used fuel, so PHEV trips on electricity stay at 0 L.
+- Trip details show the gauge litres next to the costed litres.
+
 ## 0.3.0
 
 - Trips: every drive of a car in the AutoLedger Collector with km, kWh, litres and cost, on a list or a map.

@@ -52,7 +52,8 @@ class TripData:
     charged_kwh: float = 0.0  # charged within the trip's window, used on top of the % drop
     energy_kwh: float | None = None  # set by the user: used as is
     fuel_start_l: float | None = None
-    fuel_l: float = 0.0  # provisional
+    fuel_end_l: float | None = None
+    fuel_l: float = 0.0  # measured: max(start - end, 0)
     fuel_locked: bool = False
     idle: bool = False
 
@@ -367,6 +368,7 @@ LEARN_MIN_SESSIONS = 3
 CHARGE_EFFICIENCY = 0.90
 LEARN_PLAUSIBLE = (0.6, 1.6)  # a session far from the capacity-based value is a bad reading
 RECONCILE_MIN_COVERAGE = 0.8  # share of the odometer km between full tanks that trips must cover
+FUEL_JUMP_L = 3.0  # a rise this large without a refuel record still starts a new stretch of the tank level
 
 
 @dataclass(frozen=True)
@@ -422,8 +424,9 @@ class TripCost:
     factor: Factor | None = None
     kwh_price: float | None = None
     electricity_cost: float = 0.0
-    fuel_l_provisional: float = 0.0
-    fuel_l: float = 0.0
+    fuel_l_measured: float = 0.0  # raw drop of the gauge
+    fuel_l_provisional: float = 0.0  # after smoothing the gauge noise
+    fuel_l: float = 0.0  # what is costed: reconciled at a full tank, else provisional
     fuel_reconciled: bool = False
     l_price: float | None = None
     fuel_cost: float = 0.0
@@ -443,6 +446,7 @@ class TripCost:
             "factor_mode": self.factor.mode if self.factor else None,
             "kwh_price": r(self.kwh_price, 4),
             "electricity_cost": round(self.electricity_cost, 3),
+            "fuel_l_measured": round(self.fuel_l_measured, 2),
             "fuel_l_provisional": round(self.fuel_l_provisional, 2),
             "fuel_l": round(self.fuel_l, 2),
             "fuel_reconciled": self.fuel_reconciled,
@@ -481,30 +485,98 @@ class Pool:
         return cost, cost / amount, covered < amount - 1e-6
 
 
-def reconcile_fuel(trips: list[TripData], refuels: list[RefuelData], since: datetime) -> dict[str, float]:
-    """Litres per trip after spreading each full-to-full difference by distance.
+def _non_increasing_fit(values: list[float]) -> list[float]:
+    """The non-increasing sequence closest to ``values`` (least squares, pool adjacent violators)."""
+    blocks: list[list[float]] = []  # [sum, count] of runs that share one fitted value
+    for value in values:
+        blocks.append([value, 1])
+        while len(blocks) > 1 and blocks[-1][0] / blocks[-1][1] > blocks[-2][0] / blocks[-2][1]:
+            total, count = blocks.pop()
+            blocks[-1][0] += total
+            blocks[-1][1] += count
+    return [total / count for total, count in blocks for _ in range(int(count))]
+
+
+def smooth_fuel(trips: list[TripData], refuels: list[RefuelData]) -> dict[str, float]:
+    """Fuel used per trip and idle record, from a tank level that can only go down between refuels.
+
+    Fuel gauges are noisy: a reading 0.4 L too low on one report is 0.4 L too high
+    on the next. Every report's level (each trip's and idle record's start and end) is
+    fitted with the closest non-increasing line per stretch between refuels, and a
+    record gets the drop of that line instead of the raw drop. Costs are replayed on
+    every request, so later reports revise earlier trips: a dip that comes back is
+    returned bit by bit. See docs/costs.md#fuel-gauge-noise.
+    """
+    readings: dict[datetime, float] = {}
+    for t in trips:
+        if not t.fuel_locked:
+            for ts, level in ((t.start_ts, t.fuel_start_l), (t.end_ts, t.fuel_end_l)):
+                if level is not None:
+                    readings[ts] = level
+    points = sorted(readings.items())
+    refuel_times = sorted(r.ts for r in refuels)
+
+    # A refuel, or a rise too large for noise (a refuel the user deleted), starts a new stretch.
+    segment_of: dict[datetime, int] = {}
+    fitted: dict[datetime, float] = {}
+    stretch: list[tuple[datetime, float]] = []
+    segment = 0
+
+    def close() -> None:
+        for (ts, _level), value in zip(stretch, _non_increasing_fit([level for _ts, level in stretch])):
+            fitted[ts], segment_of[ts] = value, segment
+
+    for ts, level in points:
+        if stretch:
+            prev_ts, prev_level = stretch[-1]
+            refuelled = any(prev_ts < r <= ts for r in refuel_times)
+            if refuelled or level - prev_level >= FUEL_JUMP_L:
+                close()
+                stretch, segment = [], segment + 1
+        stretch.append((ts, level))
+    if stretch:
+        close()
+
+    result: dict[str, float] = {}
+    for t in trips:
+        start, end = t.start_ts, t.end_ts
+        if t.fuel_locked or start not in fitted or end not in fitted:
+            continue
+        # Across a refuel the drop is hidden in the refuel's estimate: provisional 0 until the full tank.
+        result[t.id] = max(fitted[start] - fitted[end], 0.0) if segment_of[start] == segment_of[end] else 0.0
+    return result
+
+
+def reconcile_fuel(trips: list[TripData], refuels: list[RefuelData], provisional: dict[str, float]) -> dict[str, float]:
+    """Litres per trip after spreading each full-to-full difference over the trips that used fuel.
 
     Between two full-tank refuels the true use is the litres refuelled in between
     (the closing refuel included). The difference with the provisional trip and idle
-    litres is spread over the trips in proportion to their distance.
+    litres is spread over the trips in proportion to their provisional litres, so a
+    PHEV trip that ran on electricity stays at 0. Only when no trip shows any fuel
+    use is it spread by distance.
 
     Only intervals whose trips cover most of the odometer distance are reconciled:
     when drives are missing (HA was down), their fuel must not land on the others.
     """
     result: dict[str, float] = {}
-    full = [r for r in refuels if r.full_tank and r.ts >= since and r.odometer_km is not None]
+    # A full tank before the first trip is a valid start: only the trips after it are corrected.
+    full = [r for r in refuels if r.full_tank and r.odometer_km is not None]
     for a, b in pairwise(full):
         window = [t for t in trips if a.ts < t.end_ts <= b.ts]
         true_l = sum(r.litres for r in refuels if a.ts < r.ts <= b.ts)
-        fixed = sum(t.fuel_l for t in window if t.idle or t.fuel_locked)
+        litres = {t.id: provisional.get(t.id, t.fuel_l) for t in window}
+        fixed = sum(litres[t.id] for t in window if t.idle or t.fuel_locked)
         spread = [t for t in window if not t.idle and not t.fuel_locked]
         km = sum(t.distance_km for t in spread)
         driven = b.odometer_km - a.odometer_km
         if km <= 0 or driven <= 0 or sum(t.distance_km for t in window) < RECONCILE_MIN_COVERAGE * driven:
             continue
-        diff = true_l - fixed - sum(t.fuel_l for t in spread)
+        used = sum(litres[t.id] for t in spread)
+        diff = true_l - fixed - used
         for trip in spread:
-            result[trip.id] = max(trip.fuel_l + diff * trip.distance_km / km, 0.0)
+            share = litres[trip.id] / used if used > 0 else trip.distance_km / km
+            result[trip.id] = max(litres[trip.id] + diff * share, 0.0)
     return result
 
 
@@ -528,7 +600,8 @@ def cost_trips(
     factor = factors.at(since)
     battery = Pool((first.battery_start_pct or 0) * factor.value if factor else 0.0, kwh_price)
     tank = Pool(first.fuel_start_l or 0.0, l_price)
-    reconciled = reconcile_fuel(trips, refuels, since)
+    smoothed = smooth_fuel(trips, refuels)
+    reconciled = reconcile_fuel(trips, refuels, smoothed)
 
     # Use goes before a purchase at the same moment: a refuel seen at the end of a trip came after it.
     timeline: list[tuple[datetime, int, object]] = [(t.end_ts, 0, t) for t in trips]
@@ -545,7 +618,7 @@ def cost_trips(
             tank.add(item.litres, item.total)
             continue
         trip: TripData = item
-        cost = TripCost(fuel_l_provisional=trip.fuel_l)
+        cost = TripCost(fuel_l_measured=trip.fuel_l, fuel_l_provisional=smoothed.get(trip.id, trip.fuel_l))
         if trip.energy_kwh is not None:
             cost.energy_kwh = trip.energy_kwh
             cost.notes.append("energy set by hand")
@@ -562,7 +635,7 @@ def cost_trips(
             battery.add(-cost.energy_kwh, 0.0)  # charged by the engine: its cost is in the fuel
             cost.kwh_price = 0.0
             cost.notes.append("battery charged by the engine")
-        cost.fuel_l = reconciled.get(trip.id, trip.fuel_l)
+        cost.fuel_l = reconciled.get(trip.id, cost.fuel_l_provisional)
         cost.fuel_reconciled = trip.id in reconciled
         cost.fuel_cost, cost.l_price, short = tank.take(cost.fuel_l)
         if short:

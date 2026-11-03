@@ -28,6 +28,10 @@ Each milestone ends with something usable. The manual workflow comes first, so t
   - no CSV import yet (M4), so old data is entered by hand with back-dated dates;
   - maintenance schedules and reminders follow in M4.
 
+## 0.3.1 (3 Nov 2026)
+
+- Fuel gauge noise smoothing: the tank level between refuels is fitted with the closest non-increasing line, and trips get its drop (docs/costs.md#fuel-gauge-noise). The correction at a full tank is spread by provisional litres instead of km, so electric PHEV trips stay at 0 L.
+
 ## M3 as built (3 Nov 2026)
 
 - **Add-on 0.3.0:**

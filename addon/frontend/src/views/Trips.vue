@@ -238,7 +238,8 @@ const noCollector = computed(() =>
       :extra="{ label: () => 'Details', run: openDetail }" @edit="trips.openEdit" @delete="trips.remove" />
     <p class="small muted">
       ~ before a time: the car reported only after the trip, so the start is when it was last seen parked.
-      ✓ fuel: corrected with the litres refuelled between two full tanks.
+      Fuel is smoothed for gauge noise, so it can still shift a little with the next reports; ✓ fuel: corrected
+      with the litres refuelled between two full tanks.
     </p>
 
     <section v-if="showIdle" class="card">
@@ -305,7 +306,9 @@ const noCollector = computed(() =>
                 <td>Fuel</td>
                 <td>
                   {{ num(detail.costing.fuel_l, 2) }} L
-                  <template v-if="detail.costing.fuel_reconciled">(measured {{ num(detail.costing.fuel_l_provisional, 2) }} L, corrected at the full tank)</template>
+                  <template v-if="detail.costing.fuel_reconciled">(gauge {{ num(detail.costing.fuel_l_measured, 2) }} L, corrected at the full tank)</template>
+                  <template v-else-if="Math.abs(detail.costing.fuel_l_measured - detail.costing.fuel_l) >= 0.005">(gauge
+                    {{ num(detail.costing.fuel_l_measured, 2) }} L, smoothed for gauge noise; provisional until the next full tank)</template>
                   <template v-else-if="detail.costing.fuel_l">(provisional until the next full tank)</template>
                   × {{ money(detail.costing.l_price, 3) }}
                 </td>
@@ -377,6 +380,7 @@ const noCollector = computed(() =>
 .explain td {
   padding: 4px 0;
   vertical-align: top;
+  white-space: normal; /* the page's tables keep cells on one line */
 }
 .explain td:first-child {
   width: 90px;

@@ -86,6 +86,7 @@ export interface TripCosting {
   factor_mode: 'manual' | 'learned' | 'default' | null
   kwh_price: number | null
   electricity_cost: number
+  fuel_l_measured: number
   fuel_l_provisional: number
   fuel_l: number
   fuel_reconciled: boolean

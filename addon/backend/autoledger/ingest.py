@@ -293,7 +293,8 @@ def _idle(db: Session, event: IngestEventIn, _settings: SettingsModel) -> str:
         fuel_l=_litres_used(data.fuel_start_l, data.fuel_end_l),
         source="collector",
         locked_fields=[],
-        auto_values={},
+        auto_values={"fuel_start_l": data.fuel_start_l, "fuel_end_l": data.fuel_end_l}
+        if data.fuel_start_l is not None and data.fuel_end_l is not None else {},
     )
     db.add(idle)
     db.flush()

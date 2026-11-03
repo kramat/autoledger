@@ -97,10 +97,24 @@ Trips use battery %, while charges are measured in kWh from the wall. The conver
 
 Fuel level sensors are noisy: ±0.5 L from temperature, slope and fuel sloshing. A short PHEV trip often shows −0.4 L, or even +0.2 L.
 
-1. Each trip gets a **provisional** `fuel_l = −Δfuel_l`. A negative value caused by noise is set to 0.
-2. At every **full-tank refuel**, the true use since the previous full tank is known: `litres_used = sum of litres refuelled in between, including this refuel`.
-3. The difference between true use and the sum of provisional trip litres is **spread over those trips in proportion to their distance**. Trip fuel becomes *reconciled* (a ✓ badge in the GUI) and costs are recalculated. Idle litres and litres you entered yourself stay as they are.
-4. This only happens when both refuels have an odometer value and the trips cover at least 80 % of the km in between. Otherwise drives are missing (HA was down) and their fuel would land on the trips that were recorded.
+### Fuel gauge noise
+
+Between two refuels the tank can only go down, so every car report is a noisy reading of a falling level.
+
+1. The tank level at the start and end of every trip and idle record is collected, in time order, and split into stretches at every refuel (and at any rise of 3 L or more, in case a refuel record was deleted).
+2. Per stretch, the closest **non-increasing** line through those readings is fitted (least squares, *pool adjacent violators*).
+3. A trip's **provisional** litres are the drop of that line over the trip, not the raw drop of the gauge. A trip that spans a refuel gets 0 until the next full tank, because its use is hidden in the refuel's estimate.
+4. Costs are replayed on every request, so each new report re-fits the line. A dip that comes back is returned bit by bit.
+
+Example, 2 Nov: the gauge goes 16.4 → 16.0 → 16.4 L over two trips without a refuel. The raw drops are 0.4 and 0 L. The smoothed line is 16.4 → 16.2 → 16.2, so trip 1 gets 0.2 L. After two more reports at 16.4 L it gets 0.1 L. Noise no longer adds up: 16.4 → 16.0 → 16.4 → 16.0 → 16.4 → 16.0 counts 0.4 L in total, not 1.2 L. Real use (16.4 → 16.0 → 15.6) is kept as measured.
+
+Litres you entered yourself are not smoothed. The trip details show the gauge litres next to the costed litres.
+
+### Correction at a full tank
+
+1. At every **full-tank refuel**, the true use since the previous full tank is known: `litres_used = sum of litres refuelled in between, including this refuel`.
+2. The difference between true use and the sum of provisional litres is **spread over those trips in proportion to their provisional litres**, so a PHEV trip that ran on electricity stays at 0. Only when no trip in between shows any fuel use is it spread by distance. Trip fuel becomes *reconciled* (a ✓ badge in the GUI) and costs are recalculated. Idle litres and litres you entered yourself stay as they are.
+3. This only happens when both refuels have an odometer value and the trips cover at least 80 % of the km in between. Otherwise drives are missing (HA was down) and their fuel would land on the trips that were recorded. A full tank before the first trip is a valid start.
 
 When no full-tank refuels are logged, the values stay provisional. Totals over longer periods are still accurate, because the tank level itself is measured.
 
@@ -159,3 +173,5 @@ electricity  11.5 × 0.165 = 1.90 kWh × 0.19 = € 0.36
 fuel         0.4 L × 2.00                   = € 0.80   (provisional until the next full tank)
 trip cost                                     € 1.16   → € 0.18 / km
 ```
+
+If the next report shows 16.4 L again without a refuel, the [noise smoothing](#fuel-gauge-noise) lowers this trip to 0.2 L (€ 0.40), and further reports at 16.4 L lower it more.

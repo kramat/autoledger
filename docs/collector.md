@@ -78,7 +78,7 @@ A **trip** is created when two consecutive snapshots differ by at least `min_tri
 | `start_*` / `end_*` place | lat/lon, address and zone of the previous and new snapshot |
 | `distance_km` | `Δtrip_meter` when it agrees with the odometer (Δodometer − 1 ≤ Δtrip ≤ Δodometer + 1, so no reset and no lagging trip meter); otherwise `Δodometer` |
 | `battery_*`, `charged_kwh` | Battery % at both ends, plus the kWh charged within the same window: the home charger's counter delta, or the estimate of a detected public charge. The **add-on** turns this into energy: `(start − end) × kwh_per_pct + charged_kwh` (see [costs.md](costs.md#kwh-per-percent)). A negative result means the engine charged the battery on a PHEV. |
-| `fuel_*` | Tank level at both ends. The add-on takes `max(start − end, 0)` as provisional litres, because fuel level sensors are noisy (see [costs.md](costs.md#fuel-reconciliation)). |
+| `fuel_*` | Tank level at both ends. The add-on smooths these levels between refuels and takes the drop of the smoothed level as provisional litres, because fuel level sensors are noisy (see [costs.md](costs.md#fuel-gauge-noise)). |
 | `kind` | `round_trip` when start and end are within 150 m or in the same zone, otherwise `one_way` |
 | `flags` | `refuel_in_window`, `charge_in_window` |
 

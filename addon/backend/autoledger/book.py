@@ -36,6 +36,7 @@ def trip_data(trip: Trip) -> TripData:
         charged_kwh=trip.charged_kwh or 0.0,
         energy_kwh=_energy_override(trip),
         fuel_start_l=trip.fuel_start_l,
+        fuel_end_l=trip.fuel_end_l,
         fuel_l=trip.fuel_l,
         fuel_locked="fuel_l" in (trip.locked_fields or []) or trip.source == "manual",
     )
@@ -49,7 +50,11 @@ def idle_data(idle: IdleRecord) -> TripData:
         battery_start_pct=idle.battery_start_pct,
         battery_used_pct=idle.battery_used_pct,
         energy_kwh=_energy_override(idle),
+        # Tank levels are kept in auto_values (from 0.3.1 on); without them the measured drop is used.
+        fuel_start_l=(idle.auto_values or {}).get("fuel_start_l"),
+        fuel_end_l=(idle.auto_values or {}).get("fuel_end_l"),
         fuel_l=idle.fuel_l,
+        fuel_locked="fuel_l" in (idle.locked_fields or []) or idle.source == "manual",
         idle=True,
     )
 

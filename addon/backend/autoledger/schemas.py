@@ -273,6 +273,7 @@ class TripCostOut(BaseModel):
     factor_mode: str | None = None
     kwh_price: float | None = None
     electricity_cost: float
+    fuel_l_measured: float
     fuel_l_provisional: float
     fuel_l: float
     fuel_reconciled: bool

@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from itertools import pairwise
 
 import pytest
 
@@ -73,16 +74,94 @@ def test_empty_pool_is_priced_at_default_and_flagged():
     assert any("ran empty" in note for note in cost.notes)
 
 
-def test_fuel_reconciliation_spreads_by_distance():
+def test_fuel_reconciliation_spreads_over_the_fuel_used():
     a = RefuelData("a", at("2026-11-01", 12), 30.0, 60.0, True, 63005)
     b = RefuelData("b", at("2026-11-05", 12), 3.0, 6.0, True, 63045)
     first = trip("first", at("2026-11-01", 8), at("2026-11-01", 9), km=5, f0=10.0, fuel=0.0)
     t1 = trip("t1", at("2026-11-02", 8), at("2026-11-02", 9), km=10, fuel=0.2)
     t2 = trip("t2", at("2026-11-03", 8), at("2026-11-03", 9), km=30, fuel=1.0)
     costs = book([first, t1, t2], refuels=[a, b], kwh_per_pct=None).trip_costs
-    assert costs["t1"].fuel_l == pytest.approx(0.65)
-    assert costs["t2"].fuel_l == pytest.approx(2.35)
+    # 3.0 L refuelled, 1.2 L measured: the 1.8 L difference goes 1:5 like the measured litres.
+    assert costs["t1"].fuel_l == pytest.approx(0.5)
+    assert costs["t2"].fuel_l == pytest.approx(2.5)
     assert costs["t1"].fuel_reconciled and not costs["first"].fuel_reconciled
+
+
+def test_reconciliation_leaves_electric_trips_at_zero():
+    a = RefuelData("a", at("2026-11-01", 12), 30.0, 60.0, True, 63005)
+    b = RefuelData("b", at("2026-11-05", 12), 4.0, 8.0, True, 63045)
+    electric = trip("electric", at("2026-11-02", 8), at("2026-11-02", 9), km=30, fuel=0.0)
+    hybrid = trip("hybrid", at("2026-11-03", 8), at("2026-11-03", 9), km=10, fuel=3.0)
+    costs = book([electric, hybrid], refuels=[a, b], kwh_per_pct=None).trip_costs
+    assert costs["electric"].fuel_l == 0
+    assert costs["hybrid"].fuel_l == pytest.approx(4.0)
+
+
+def test_no_fuel_used_at_all_is_spread_by_distance():
+    a = RefuelData("a", at("2026-11-01", 12), 30.0, 60.0, True, 63005)
+    b = RefuelData("b", at("2026-11-05", 12), 2.0, 4.0, True, 63045)
+    t1 = trip("t1", at("2026-11-02", 8), at("2026-11-02", 9), km=10)
+    t2 = trip("t2", at("2026-11-03", 8), at("2026-11-03", 9), km=30)
+    costs = book([t1, t2], refuels=[a, b], kwh_per_pct=None).trip_costs
+    assert (costs["t1"].fuel_l, costs["t2"].fuel_l) == (pytest.approx(0.5), pytest.approx(1.5))
+
+
+# --- Fuel gauge noise -----------------------------------------------------------
+
+
+def levels(*values: float, km: float = 6.3, start: str = "2026-11-02"):
+    """Consecutive trips whose tank level goes through ``values``; each starts at the previous report."""
+    t0 = at(start, 8)
+    return [
+        TripData(f"t{i}", t0 + timedelta(hours=i), t0 + timedelta(hours=i + 1), km,
+                 fuel_start_l=a, fuel_end_l=b, fuel_l=round(max(a - b, 0), 2))
+        for i, (a, b) in enumerate(pairwise(values), 1)
+    ]
+
+
+def fuel(costs, n: int) -> list[float]:
+    return [round(costs[f"t{i}"].fuel_l, 3) for i in range(1, n + 1)]
+
+
+def test_a_dip_that_comes_back_is_returned():
+    """16.4 → 16.0 → 16.4 L: half the dip stays until more reports say 16.4."""
+    costs = book(levels(16.4, 16.0, 16.4), kwh_per_pct=None).trip_costs
+    assert fuel(costs, 2) == [0.2, 0.0]
+    assert costs["t1"].fuel_l_measured == 0.4
+    costs = book(levels(16.4, 16.0, 16.4, 16.4, 16.4), kwh_per_pct=None).trip_costs
+    assert fuel(costs, 4) == [0.1, 0.0, 0.0, 0.0]
+
+
+def test_real_use_is_kept():
+    costs = book(levels(16.4, 16.0, 15.6, 15.2), kwh_per_pct=None).trip_costs
+    assert fuel(costs, 3) == [0.4, 0.4, 0.4]
+
+
+def test_noise_does_not_add_up_between_refuels():
+    """Measured drops 0.4 + 0.4 + 0.4 L, but the tank only went from 16.4 to 16.0."""
+    costs = book(levels(16.4, 16.0, 16.4, 16.0, 16.4, 16.0), kwh_per_pct=None).trip_costs
+    assert sum(fuel(costs, 5)) == pytest.approx(0.4, abs=0.01)
+
+
+def test_a_refuel_starts_a_new_stretch():
+    trips = levels(16.4, 16.0, 40.0, 39.5)
+    refuel = RefuelData("r", trips[1].end_ts, 24.0, 48.0, False)
+    costs = book(trips, refuels=[refuel], kwh_per_pct=None).trip_costs
+    # The trip that ends at the pump: its use is hidden in the refuel estimate.
+    assert fuel(costs, 3) == [0.4, 0.0, 0.5]
+
+
+def test_a_big_rise_without_a_refuel_record_also_starts_a_new_stretch():
+    costs = book(levels(16.4, 16.0, 40.0, 39.5), kwh_per_pct=None).trip_costs
+    assert fuel(costs, 3) == [0.4, 0.0, 0.5]
+
+
+def test_smoothed_trip_counts_as_electric():
+    trips = levels(16.4, 16.0, 16.4)
+    for t in trips:
+        object.__setattr__(t, "battery_used_pct", 10.0)
+    totals = book(trips).period(date(2026, 11, 1), date(2026, 12, 1))
+    assert totals.electric_km == pytest.approx(12.6)  # 0.2 L over 6.3 km is below 0.05 L/km
 
 
 def test_no_reconciliation_when_drives_are_missing():
