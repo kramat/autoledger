@@ -36,6 +36,18 @@ class RecordOut(BaseModel):
     deleted_at: dt.datetime | None = None
 
 
+class AttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    resource: str
+    record_id: str
+    filename: str
+    mime_type: str
+    size: int
+    created_at: dt.datetime
+
+
 class AutoOut(BaseModel):
     source: str
     status: str
@@ -60,6 +72,9 @@ class VehicleIn(InModel):
     start_date: dt.date
     purchase_price: float | None = Field(None, ge=0)
     purchase_date: dt.date | None = None
+    resale_estimate: float | None = Field(None, ge=0)
+    resale_date: dt.date | None = None
+    depreciation_enabled: bool = False
     kwh_per_pct: float | None = Field(None, gt=0, le=2)
     color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     note: str | None = None
@@ -70,6 +85,17 @@ class VehicleIn(InModel):
             self.fuel_type = "none"
         if self.type != "BEV" and self.fuel_type == "none":
             raise ValueError("A vehicle with an engine needs a fuel type")
+        return self
+
+    @model_validator(mode="after")
+    def _check_depreciation(self) -> "VehicleIn":
+        if self.purchase_date and self.resale_date and self.resale_date <= self.purchase_date:
+            raise ValueError("The resale date must be after the purchase date")
+        if self.depreciation_enabled:
+            if self.purchase_price is None or self.purchase_date is None or self.resale_date is None:
+                raise ValueError("Depreciation needs a purchase price, a purchase date and a resale date")
+            if (self.resale_estimate or 0) > self.purchase_price:
+                raise ValueError("The expected resale value is higher than the purchase price")
         return self
 
 
@@ -120,6 +146,7 @@ class RefuelOut(RefuelIn, RecordOut, AutoOut):
     # Filled in on list responses: consumption of the full-to-full interval ending here.
     interval_km: float | None = None
     l_per_100km: float | None = None
+    attachments: list[AttachmentOut] = []
 
 
 # --- Odometer readings ----------------------------------------------------
@@ -153,6 +180,8 @@ class MaintenanceIn(InModel):
 
 class MaintenanceOut(MaintenanceIn, RecordOut):
     model_config = ConfigDict(from_attributes=True)
+
+    attachments: list[AttachmentOut] = []
 
 
 class ScheduleIn(InModel):
@@ -218,6 +247,8 @@ class ExpenseIn(InModel):
 
 class ExpenseOut(ExpenseIn, RecordOut):
     model_config = ConfigDict(from_attributes=True)
+
+    attachments: list[AttachmentOut] = []
 
 
 # --- Charging -------------------------------------------------------------

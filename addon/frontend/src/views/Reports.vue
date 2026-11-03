@@ -83,6 +83,7 @@ const rows: { label: string; value: (c: Column) => string; has: (c: Column) => b
   { label: 'Electricity', value: (c) => amount(c.total.electricity_cost, c.total.electricity_kwh, 'kWh'), has: (c) => c.total.electricity_kwh > 0 },
   { label: 'Maintenance', value: (c) => money(c.total.maintenance_cost), has: (c) => c.total.maintenance_cost > 0 },
   { label: 'Other costs', value: (c) => money(c.total.other_cost), has: (c) => c.total.other_cost > 0 },
+  { label: 'Depreciation', value: (c) => money(c.total.depreciation_cost), has: (c) => c.total.depreciation_cost > 0 },
   { label: 'Fuel consumption', value: perCar((c) => (c.total.fuel_l_per_100km == null ? '—' : `${num(c.total.fuel_l_per_100km, 1)} L/100 km`)), has: (c) => c.total.fuel_l_per_100km != null },
   { label: 'Electric consumption', value: perCar((c) => (c.total.kwh_per_100km == null ? '—' : `${num(c.total.kwh_per_100km, 1)} kWh/100 km`)), has: (c) => c.total.kwh_per_100km != null },
   { label: 'Electric share (estimate)', value: perCar((c) => pct(c.total.electric_share)), has: (c) => c.total.electric_share != null },
@@ -106,6 +107,7 @@ const groups = computed<GroupTotals[]>(() => {
   return vehicle ? vehicle.groups : r.vehicles.length === 1 ? r.vehicles[0].groups : r.combined.groups
 })
 const hasElectricity = computed(() => groups.value.some((g) => g.electricity_cost > 0))
+const hasDepreciation = computed(() => groups.value.some((g) => g.depreciation_cost > 0))
 const groupLabel = (g: GroupTotals) => (report.value?.group === 'month' ? fmtMonth(g.label) : g.label)
 
 function axisStyle() {
@@ -131,7 +133,8 @@ const costOption = computed(() => {
     { key: 'fuel_cost', name: 'Fuel', color: t.series[0] },
     { key: 'electricity_cost', name: 'Electricity', color: t.series[1] },
     { key: 'maintenance_cost', name: 'Maintenance', color: t.series[2] },
-    { key: 'other_cost', name: 'Other', color: t.series[3] },
+    // Four colors only: depreciation shares the "Other" bar (the table shows it apart).
+    { key: 'other_cost', name: hasDepreciation.value ? 'Other + depreciation' : 'Other', color: t.series[3] },
   ] as const
   const max = Math.max(0, ...data.map((g) => g.total_cost))
   return {
@@ -160,7 +163,7 @@ const costOption = computed(() => {
         type: 'bar',
         stack: 'cost',
         barMaxWidth: 24,
-        data: data.map((g) => Math.round(g[c.key] * 100) / 100),
+        data: data.map((g) => Math.round((g[c.key] + (c.key === 'other_cost' ? g.depreciation_cost : 0)) * 100) / 100),
         itemStyle: { color: c.color, borderColor: t.surface, borderWidth: 2 },
         emphasis: { focus: 'series' },
       })),
@@ -309,6 +312,7 @@ const exportParams = computed(() => params.value)
                 <th scope="col">Period</th><th class="num" scope="col">km</th><th class="num" scope="col">Fuel</th>
                 <th v-if="hasElectricity" class="num" scope="col">Electricity</th>
                 <th class="num" scope="col">Maintenance</th><th class="num" scope="col">Other</th>
+                <th v-if="hasDepreciation" class="num" scope="col">Depreciation</th>
                 <th class="num" scope="col">Total</th><th class="num" scope="col">Per km</th>
               </tr>
             </thead>
@@ -317,6 +321,7 @@ const exportParams = computed(() => params.value)
                 <td>{{ groupLabel(g) }}</td><td class="num">{{ num(g.km) }}</td><td class="num">{{ money(g.fuel_cost) }}</td>
                 <td v-if="hasElectricity" class="num">{{ money(g.electricity_cost) }}</td>
                 <td class="num">{{ money(g.maintenance_cost) }}</td><td class="num">{{ money(g.other_cost) }}</td>
+                <td v-if="hasDepreciation" class="num">{{ money(g.depreciation_cost) }}</td>
                 <td class="num">{{ money(g.total_cost) }}</td>
                 <td class="num">{{ g.total_cost_per_km == null ? '—' : money(g.total_cost_per_km, 3) }}</td>
               </tr>

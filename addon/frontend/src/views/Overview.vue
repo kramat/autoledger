@@ -33,6 +33,7 @@ const monthly = computed<MonthTotals[]>(() => {
   return state.vehicleId ? (summary.value.vehicles[0]?.monthly ?? []) : summary.value.combined.monthly
 })
 const hasElectricity = computed(() => monthly.value.some((m) => m.electricity_cost > 0))
+const hasDepreciation = computed(() => monthly.value.some((m) => m.depreciation_cost > 0))
 
 function tripRoute(t: Trip): string {
   const from = t.start_address ?? t.start_zone ?? '?'
@@ -61,7 +62,8 @@ const categories = computed(() => {
     { key: 'fuel_cost', name: 'Fuel', color: theme.value.series[0] },
     { key: 'electricity_cost', name: 'Electricity', color: theme.value.series[1] },
     { key: 'maintenance_cost', name: 'Maintenance', color: theme.value.series[2] },
-    { key: 'other_cost', name: 'Other', color: theme.value.series[3] },
+    // Four colors only: depreciation shares the "Other" bar (tables show it apart).
+    { key: 'other_cost', name: hasDepreciation.value ? 'Other + depreciation' : 'Other', color: theme.value.series[3] },
   ] as const
   return all.filter((c) => c.key !== 'electricity_cost' || hasElectricity.value)
 })
@@ -113,7 +115,7 @@ const costOption = computed(() => {
       type: 'bar',
       stack: 'cost',
       barMaxWidth: 28,
-      data: months.map((m) => Math.round(m[c.key] * 100) / 100),
+      data: months.map((m) => Math.round((m[c.key] + (c.key === 'other_cost' ? m.depreciation_cost : 0)) * 100) / 100),
       itemStyle: { color: c.color, borderColor: t.surface, borderWidth: 1 },
       emphasis: { focus: 'series' },
     })),
@@ -212,6 +214,11 @@ const kmOption = computed(() => {
               <div class="value">{{ money(v.period.other_cost) }}</div>
               <div class="sub">Insurance, tax, parking…</div>
             </div>
+            <div v-if="v.period.depreciation_cost > 0" class="stat">
+              <div class="label">Depreciation</div>
+              <div class="value">{{ money(v.period.depreciation_cost) }}</div>
+              <div class="sub">Loss of value, spread per month</div>
+            </div>
           </div>
           <p class="small muted" style="margin: 14px 0 0">
             Last 12 months: {{ km(v.rolling_12m.km) }}
@@ -260,6 +267,7 @@ const kmOption = computed(() => {
             <div class="stat"><div class="label">Energy</div><div class="value">{{ money(summary.combined.period.energy_cost) }}</div></div>
             <div class="stat"><div class="label">Maintenance</div><div class="value">{{ money(summary.combined.period.maintenance_cost) }}</div></div>
             <div class="stat"><div class="label">Other costs</div><div class="value">{{ money(summary.combined.period.other_cost) }}</div></div>
+            <div v-if="summary.combined.period.depreciation_cost > 0" class="stat"><div class="label">Depreciation</div><div class="value">{{ money(summary.combined.period.depreciation_cost) }}</div></div>
           </div>
         </section>
       </div>
@@ -285,6 +293,7 @@ const kmOption = computed(() => {
                 <th scope="col">Month</th><th class="num" scope="col">km</th><th class="num" scope="col">Fuel</th>
                 <th v-if="hasElectricity" class="num" scope="col">Electricity</th>
                 <th class="num" scope="col">Maintenance</th><th class="num" scope="col">Other</th>
+                <th v-if="hasDepreciation" class="num" scope="col">Depreciation</th>
                 <th class="num" scope="col">Total</th><th class="num" scope="col">Per km</th>
               </tr>
             </thead>
@@ -293,6 +302,7 @@ const kmOption = computed(() => {
                 <td>{{ fmtMonth(m.month) }}</td><td class="num">{{ num(m.km) }}</td><td class="num">{{ money(m.fuel_cost) }}</td>
                 <td v-if="hasElectricity" class="num">{{ money(m.electricity_cost) }}</td>
                 <td class="num">{{ money(m.maintenance_cost) }}</td><td class="num">{{ money(m.other_cost) }}</td>
+                <td v-if="hasDepreciation" class="num">{{ money(m.depreciation_cost) }}</td>
                 <td class="num">{{ money(m.total_cost) }}</td>
                 <td class="num">{{ m.total_cost_per_km == null ? '—' : money(m.total_cost_per_km, 3) }}</td>
               </tr>

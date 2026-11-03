@@ -79,6 +79,17 @@ class ExpenseData:
     end_date: date | None = None
 
 
+@dataclass(frozen=True)
+class DepreciationData:
+    """Value lost between purchase and the expected resale, spread straight-line per month."""
+
+    purchase_date: date
+    resale_date: date
+    amount: float  # purchase price − expected resale value
+    # Reports start at the vehicle's tracking start: the months before it are not counted.
+    count_from: date | None = None
+
+
 # --- Results --------------------------------------------------------------
 
 
@@ -112,6 +123,7 @@ class PeriodTotals:
     electricity_cost: float = 0.0
     maintenance_cost: float = 0.0
     other_cost: float = 0.0
+    depreciation_cost: float = 0.0
     refuel_count: int = 0
     charge_count: int = 0
     maintenance_count: int = 0
@@ -152,7 +164,7 @@ class PeriodTotals:
 
     @property
     def total_cost(self) -> float:
-        return self.energy_cost + self.maintenance_cost + self.other_cost
+        return self.energy_cost + self.maintenance_cost + self.other_cost + self.depreciation_cost
 
     @property
     def energy_cost_per_km(self) -> float | None:
@@ -180,6 +192,7 @@ class PeriodTotals:
             electricity_cost=self.electricity_cost + other.electricity_cost,
             maintenance_cost=self.maintenance_cost + other.maintenance_cost,
             other_cost=self.other_cost + other.other_cost,
+            depreciation_cost=self.depreciation_cost + other.depreciation_cost,
             refuel_count=self.refuel_count + other.refuel_count,
             charge_count=self.charge_count + other.charge_count,
             maintenance_count=self.maintenance_count + other.maintenance_count,
@@ -210,6 +223,7 @@ class PeriodTotals:
             "electricity_cost": r(self.electricity_cost, 2),
             "maintenance_cost": r(self.maintenance_cost, 2),
             "other_cost": r(self.other_cost, 2),
+            "depreciation_cost": r(self.depreciation_cost, 2),
             "energy_cost": r(self.energy_cost, 2),
             "total_cost": r(self.total_cost, 2),
             "energy_cost_per_km": r(self.energy_cost_per_km, 3),
@@ -369,6 +383,34 @@ def expense_in_range(expense: ExpenseData, start: date, end: date, today: date) 
             total += per_month * overlap / (next_month - month).days
         month = next_month
     return total
+
+
+def _month_fraction(start: date, end: date) -> float:
+    """Calendar months in [start, end), counting a partial month by its share of days."""
+    months = 0.0
+    month = month_start(start)
+    while month < end:
+        next_month = add_months(month, 1)
+        overlap = (min(next_month, end) - max(month, start)).days
+        months += max(overlap, 0) / (next_month - month).days
+        month = next_month
+    return months
+
+
+def depreciation_in_range(dep: DepreciationData, start: date, end: date, today: date) -> float:
+    """Depreciation in [start, end): the same amount per month from purchase to resale, up to today.
+
+    ``amount / months_between(purchase, resale)`` per month, pro rata for partial
+    months, so the whole period adds up to ``amount`` exactly.
+    """
+    total_months = _month_fraction(dep.purchase_date, dep.resale_date)
+    if total_months <= 0 or dep.amount <= 0:
+        return 0.0
+    lo = max(start, dep.purchase_date, dep.count_from or dep.purchase_date)
+    hi = min(end, dep.resale_date, today + timedelta(days=1))
+    if hi <= lo:
+        return 0.0
+    return dep.amount / total_months * _month_fraction(lo, hi)
 
 
 # --- kWh per percent ------------------------------------------------------
@@ -674,6 +716,7 @@ class VehicleBook:
         maintenance: Iterable[MaintenanceData] = (),
         expenses: Iterable[ExpenseData] = (),
         trips: Iterable[TripData] = (),
+        depreciation: DepreciationData | None = None,
         kwh_per_pct: float | None = None,
         battery_usable_kwh: float | None = None,
         default_kwh_price: float = 0.25,
@@ -685,6 +728,7 @@ class VehicleBook:
         self.charges = list(charges)
         self.maintenance = list(maintenance)
         self.expenses = list(expenses)
+        self.depreciation = depreciation
         self.trips = sorted(trips, key=lambda t: t.start_ts)
         self.factors = FactorModel(kwh_per_pct, battery_usable_kwh, self.charges)
         # Energy is counted per trip from the first trip on, and on purchase before it.
@@ -748,6 +792,8 @@ class VehicleBook:
                 totals.maintenance_count += 1
         for expense in self.expenses:
             totals.other_cost += expense_in_range(expense, start, end, self.today)
+        if self.depreciation is not None:
+            totals.depreciation_cost = depreciation_in_range(self.depreciation, start, end, self.today)
         return totals
 
     def _add_trip(self, totals: PeriodTotals, trip: TripData) -> None:

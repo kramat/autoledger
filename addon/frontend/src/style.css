@@ -203,8 +203,11 @@ a {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* --- Controls ------------------------------------------------------------ */
@@ -305,6 +308,8 @@ button:disabled {
 /* --- Tables -------------------------------------------------------------- */
 
 .table-wrap {
+  /* Contains absolutely positioned children (.sr-only headers): without it they widen the page on phones. */
+  position: relative;
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -564,3 +569,19 @@ td.row-actions {
 .toast button.icon {
   color: var(--surface);
 }
+
+/* Receipt photos and invoices in record dialogs */
+.attachments { margin: 4px 0 12px; }
+.attachments-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.attachment-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.attachment-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.attachment-list a { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; color: inherit; }
+.attachment-list img, .attachment-list .file-icon {
+  width: 44px; height: 44px; flex: none; border-radius: 6px; object-fit: cover; border: 1px solid var(--border);
+}
+.attachment-list .file-icon {
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+  color: var(--muted); background: var(--surface-2, transparent);
+}
+.attachment-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.checkbox-hint { display: block; margin-top: 2px; }

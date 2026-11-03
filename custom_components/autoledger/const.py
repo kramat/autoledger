@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 DOMAIN = "autoledger"
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 API_VERSION = 1
 
 CONF_URL = "url"
@@ -43,6 +43,14 @@ VEHICLE_ROLES = (
 ROLE_DAYS_TO_SERVICE = "days_to_service"
 ROLE_DISTANCE_TO_SERVICE = "distance_to_service"
 SERVICE_ROLES = (ROLE_DAYS_TO_SERVICE, ROLE_DISTANCE_TO_SERVICE)
+# Fuel price (€/L): read when a refuel is detected, to suggest its price.
+ROLE_FUEL_PRICE = "fuel_price"
+
+# Snapshot boost: ask the car's integration for fresh data on local hints (docs/collector.md#snapshot-boost).
+CONF_BOOST = "boost"
+CONF_BOOST_SERVICE = "boost_service"
+CONF_BOOST_PERSONS = "boost_persons"
+CONF_BOOST_MAX_PER_DAY = "boost_max_per_day"
 
 # Charger subentry data
 CONF_NAME = "name"

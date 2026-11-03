@@ -1,5 +1,7 @@
 """JSON backup and restore, and CSV import (docs/api.md#export-and-backup)."""
 
+import base64
+import hashlib
 import json
 from datetime import date, datetime, timedelta
 from typing import Any, Literal
@@ -18,6 +20,7 @@ from ..db import UTCDateTime, get_db, utcnow
 from ..importer import FIELDS, Options, convert_row, guess_date_order, guess_decimal, guess_mapping, read_csv
 from ..ledger import local_midnight
 from ..migrate import alembic_config, backup_database
+from .attachments import attachment_dir
 from .crud import check_vehicle
 from .export import attachment
 
@@ -39,8 +42,12 @@ def _json_value(value):
 
 
 @router.get("/backup")
-def backup(request: Request, db: Session = Depends(get_db)):
-    """Every table as JSON, deleted records included. The API token is not part of it."""
+def backup(request: Request, attachments: bool = False, db: Session = Depends(get_db)):
+    """Every table as JSON, deleted records included. The API token is not part of it.
+
+    With ``attachments=true`` the files of the attachments are included as base64
+    under ``files``; without it only their rows are.
+    """
     tz = request.app.state.config.tz
     data = {
         "format": BACKUP_FORMAT,
@@ -56,6 +63,13 @@ def backup(request: Request, db: Session = Depends(get_db)):
             for table in TABLES
         },
     }
+    if attachments:
+        folder = attachment_dir(request)
+        data["files"] = {
+            row.id: base64.b64encode(path.read_bytes()).decode("ascii")
+            for row in db.scalars(select(models.Attachment))
+            if (path := folder / row.id).is_file()
+        }
     return attachment(
         json.dumps(data, ensure_ascii=False, separators=(",", ":")),
         "application/json",
@@ -135,8 +149,30 @@ def restore(
                     raise HTTPException(422, f"The backup has conflicting rows in {table.name}") from None
                 skipped += 1
         counts[table.name] = {"inserted": inserted, "skipped": skipped}
+    files = _restore_files(db, attachment_dir(request), data.get("files"))
     db.commit()
-    return {"mode": mode, "tables": counts}
+    return {"mode": mode, "tables": counts, "files": files}
+
+
+def _restore_files(db: Session, folder, files) -> dict[str, int]:
+    """Write the backup's attachment files that are not there yet and match their row."""
+    written = skipped = 0
+    if not isinstance(files, dict) or not files:
+        return {"written": 0, "skipped": 0}
+    folder.mkdir(parents=True, exist_ok=True)
+    rows = {a.id: a for a in db.scalars(select(models.Attachment).where(models.Attachment.id.in_(list(files))))}
+    for attachment_id, encoded in files.items():
+        row, path = rows.get(attachment_id), folder / attachment_id
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            content = None
+        if row is None or content is None or path.exists() or hashlib.sha256(content).hexdigest() != row.sha256:
+            skipped += 1
+            continue
+        path.write_bytes(content)
+        written += 1
+    return {"written": written, "skipped": skipped}
 
 
 # --- CSV import -----------------------------------------------------------

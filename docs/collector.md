@@ -2,7 +2,7 @@
 
 Domain: `autoledger`. Installed through HACS. It turns the states of your car and charger entities into records and delivers them to the AutoLedger add-on.
 
-> **Built in M2 and M3:** setup (discovery + manual), vehicle and charger subentries, snapshots, home charge sessions, public charge and refuel detection, odometer readings, trips (snapshot mode), idle consumption, backfill, the outbox, the sensors, the services and the events. Marked *(M5)* below: live trip mode, snapshot boost and the remaining services.
+> **Built in M2–M5:** setup (discovery + manual), vehicle and charger subentries, snapshots, home charge sessions, public charge and refuel detection, odometer readings, trips (snapshot mode), idle consumption, backfill, the outbox, the sensors, the services, the events, snapshot boost and the fuel price role. **Not built:** live trip mode (see below) and the `fuel_flap` role.
 
 ## Setup
 
@@ -33,7 +33,8 @@ Every setting can be changed later through the subentry's **Reconfigure** option
 | `plug_state` | no | sensor or binary_sensor (connected/disconnected) | Charge-session vehicle attribution |
 | `car_timestamp` | no | sensor containing the car's own report time | Exact event times for cloud-based cars |
 | `days_to_service`, `distance_to_service` | no | sensors with the car's own service countdown (Lynk: `…_days_to_service`, `…_distance_to_service`) | Shown next to the maintenance schedules as a cross-check. Read at every snapshot and sent as `service.status` when they change; they do not trigger a snapshot. |
-| `fuel_flap`, `running`, `fuel_price` | *(M5)* | | Refuel confirmation, live trip mode, refuel price suggestion. Until then the add-on suggests the price of your last refuel, or the default from Settings. |
+| `fuel_price` | no | sensor or input_number in €/L (for example from a fuel price integration) | Read when a refuel is detected: its state becomes the suggested price (`price_source: entity`). Values outside 0.30–10 €/L are ignored. Without it, the add-on suggests the price of your last refuel, or the default from Settings. |
+| `fuel_flap`, `running` | *(not built)* | | Refuel confirmation and live trip mode. |
 
 The vehicle's type, tank size, usable battery and wall kWh per % come from the add-on. The Collector takes them over again on every summary poll (5 min), so a change on the add-on's Vehicles page needs no reconfigure or reload. The latest values are kept in the Collector's store and used after a restart, even when the add-on is not reachable yet.
 
@@ -85,17 +86,28 @@ A **trip** is created when two consecutive snapshots differ by at least `min_tri
 
 If the same segment *also* shows the battery going up or the fuel going up, the trip is still created. The extra energy becomes a separate external-charge or refuel event, flagged for review (see below). One report can cover several drives; split such a trip on the Trips page.
 
-### Live mode *(M5)* (optional, for cars with a live `running` sensor)
+### Live mode *(not built)* (for cars with a live `running` sensor)
 
 When `running` is mapped *and* reports live (it changes while the car is actually driving), a trip opens when `running` turns on and closes when it has been off for `trip_end_delay` (default 3 min). Snapshots in between update the open trip. Two trips less than `merge_gap` apart (default 2 min) are merged.
 
-The flow only offers live mode after it has seen `running` change at least once. Otherwise a cloud car would fall back to empty trips.
+The flow would only offer live mode after it has seen `running` change at least once. Otherwise a cloud car would fall back to empty trips. Left out of M5: the reference car's `running` never changes, so it could not be tested, and snapshot boost covers the same need for cloud cars.
 
-### Snapshot boost *(M5)* (optional, off by default)
+### Snapshot boost (optional, off until an action is set)
 
-For cars whose integration offers a "refresh now" service (for example `lynkco.force_update_data`), the collector can call it a few times after it notices a hint that a drive started or ended. Hints are the lock changing, the plug disconnecting, or `running` changing. This gives better start and end points.
+Cloud cars upload when they park, but Home Assistant only sees the upload at the car integration's next poll, which can be hours later. A late snapshot ends a trip late, and a trip window that runs into a home charge gets the wrong energy. When the car's integration has a "refresh now" action (Lynk & Co: `lynkco.force_update_data`), the Collector calls it on **local** hints, which arrive in real time:
 
-The trade-off is extra cloud calls and possibly waking the car, so it is limited to `boost_max_per_day` (default 12).
+| Hint | Refresh |
+|---|---|
+| The home charger linked to the car starts a session | at once: plugging in at home means a drive just ended |
+| That session ends | after 2 min, for the final battery % |
+| A chosen person leaves home | at once, so the previous drive is closed before the next starts |
+| A chosen person arrives home | after 2 and after 10 min (the car may upload slowly) |
+
+The car's own lock, plug and `running` states are not used: they come from the same late cloud poll.
+
+- Set it in the vehicle's **Change entities** → *Snapshot boost*: the action (suggested from the odometer's integration when it has one with *force_update*, *refresh*, *update_data* or *poll* in its name), the people, and `boost_max_per_day` (default 12). Leave the action empty to switch it off.
+- At most one refresh per minute (two phones arriving together give one), and at most `boost_max_per_day` per local day. Each call, and each skipped one with the reason, is in the diagnostics' decisions.
+- `lynkco.force_update_data` only reads the Lynk cloud (two requests and an address lookup); it does not wake the car. Another integration's refresh action may wake the car: keep the daily limit low then.
 
 ## Home charge detection
 
@@ -228,12 +240,10 @@ actions:
 | Option | Default | Meaning |
 |---|---|---|
 | `min_trip_km` | 0.5 | Smaller distance deltas count as GPS/odometer noise |
-| `trip_mode` *(M5)* | `snapshot` | `snapshot` or `live` |
-| `trip_end_delay` *(M5)* | 3 min | Live mode only |
 | `external_charge_min_pct` | 3 % | Threshold for detecting a public charge |
 | `refuel_min_l` | 3 L | Threshold for detecting a refuel |
 | `idle_min_pct` / `idle_min_l` | 1 % / 0.5 L | Thresholds for idle-consumption records |
-| `boost_service`, `boost_max_per_day` *(M5)* | — / 12 | Optional "refresh now" service |
+| `boost_service`, `boost_persons`, `boost_max_per_day` | — / — / 12 | Snapshot boost (see above) |
 
 Charger subentry options: `start_w` (default 500), `stop_w` (default 100), `min_session_kwh` (default 0.2), and `fixed_price`, which is used when no price entity is mapped or it is unavailable. When neither is available, the add-on's fallback electricity price is used. The price source is stored with every price sample.
 

@@ -56,7 +56,8 @@ def counted_days(start: date, end: date, today: date) -> int:
 def per_year(totals: PeriodTotals, days: int) -> dict:
     """Totals scaled to a year, for comparing periods of different length."""
     if days < 28:
-        return {"km": None, "total_cost": None, "energy_cost": None, "maintenance_cost": None, "other_cost": None}
+        return {"km": None, "total_cost": None, "energy_cost": None, "maintenance_cost": None, "other_cost": None,
+                "depreciation_cost": None}
     factor = 365.25 / days
     return {
         "km": round(totals.km * factor),
@@ -64,6 +65,7 @@ def per_year(totals: PeriodTotals, days: int) -> dict:
         "energy_cost": round(totals.energy_cost * factor, 2),
         "maintenance_cost": round(totals.maintenance_cost * factor, 2),
         "other_cost": round(totals.other_cost * factor, 2),
+        "depreciation_cost": round(totals.depreciation_cost * factor, 2),
     }
 
 

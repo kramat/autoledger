@@ -47,6 +47,10 @@ class Vehicle(RecordMixin, Base):
     start_date: Mapped[dt.date] = mapped_column(Date)
     purchase_price: Mapped[float | None] = mapped_column(Float)
     purchase_date: Mapped[dt.date | None] = mapped_column(Date)
+    # Straight-line depreciation from purchase to the expected resale (docs/costs.md#recurring-expenses-and-depreciation).
+    resale_estimate: Mapped[float | None] = mapped_column(Float)
+    resale_date: Mapped[dt.date | None] = mapped_column(Date)
+    depreciation_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Wall kWh per battery % (includes charging losses). None: derived from capacity.
     kwh_per_pct: Mapped[float | None] = mapped_column(Float)
     color: Mapped[str | None] = mapped_column(String(9))
@@ -129,6 +133,23 @@ class Expense(RecordMixin, Base):
     recurrence: Mapped[str | None] = mapped_column(String(10))
     end_date: Mapped[dt.date | None] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
+
+
+class Attachment(RecordMixin, Base):
+    """A receipt photo or invoice of a refuel, maintenance entry or expense.
+
+    The file is stored as ``<data dir>/attachments/<id>``; the row keeps its name and type.
+    """
+
+    __tablename__ = "attachments"
+    __table_args__ = (Index("ix_attachments_record", "resource", "record_id"),)
+
+    resource: Mapped[str] = mapped_column(String(24))  # refuels | maintenance | expenses
+    record_id: Mapped[str] = mapped_column(String(36))
+    filename: Mapped[str] = mapped_column(String(200))
+    mime_type: Mapped[str] = mapped_column(String(80))
+    size: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
 
 
 class ChargeSession(RecordMixin, AutoMixin, Base):

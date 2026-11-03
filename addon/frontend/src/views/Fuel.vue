@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { api, type OdometerReading, type Refuel } from '../api'
 import DataTable, { type Column } from '../components/DataTable.vue'
+import { clip } from '../attachments'
 import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDateTime, km, money, nowLocalInput, num } from '../format'
@@ -25,6 +26,7 @@ const refuelColumns = computed<Column<Refuel>[]>(() => [
   { key: 'full', label: 'Tank', value: (r) => (r.full_tank ? 'Full' : 'Partial') },
   { key: 'cons', label: 'L/100 km', num: true, value: (r) => num(r.l_per_100km, 2) },
   { key: 'station', label: 'Station', wrap: true, value: (r) => r.station ?? '' },
+  { key: 'receipt', label: 'Receipt', value: clip },
 ])
 
 const readingColumns = computed<Column<OdometerReading>[]>(() => [
@@ -122,7 +124,7 @@ function exportUrl(): string {
 
     <RecordDialog v-if="refuels.dialog.value" :title="refuels.dialog.value.mode === 'create' ? 'Add refuel' : 'Edit refuel'"
       :fields="refuelFields" :initial="refuels.dialog.value.initial" :mode="refuels.dialog.value.mode"
-      :save="refuels.save" @close="refuels.dialog.value = null" />
+      :save="refuels.save" attachments="refuels" @changed="refuels.load" @close="refuels.dialog.value = null" />
     <RecordDialog v-if="readings.dialog.value"
       :title="readings.dialog.value.mode === 'create' ? 'Add odometer reading' : 'Edit odometer reading'"
       :fields="readingFields" :initial="readings.dialog.value.initial" :mode="readings.dialog.value.mode"

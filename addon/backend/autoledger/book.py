@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .ledger import ChargeData, ExpenseData, MaintenanceData, OdometerData, RefuelData, TripData, VehicleBook
+from .ledger import ChargeData, DepreciationData, ExpenseData, MaintenanceData, OdometerData, RefuelData, TripData, VehicleBook
 from .models import ChargeSession, Expense, IdleRecord, MaintenanceRecord, OdometerReading, Refuel, Trip, Vehicle
 from .settings_store import get_settings
 
@@ -59,6 +59,18 @@ def idle_data(idle: IdleRecord) -> TripData:
     )
 
 
+def depreciation_data(vehicle: Vehicle) -> DepreciationData | None:
+    """The vehicle's depreciation, when it is switched on and complete."""
+    if not vehicle.depreciation_enabled or vehicle.purchase_price is None:
+        return None
+    if vehicle.purchase_date is None or vehicle.resale_date is None or vehicle.resale_date <= vehicle.purchase_date:
+        return None
+    return DepreciationData(
+        vehicle.purchase_date, vehicle.resale_date, max(vehicle.purchase_price - (vehicle.resale_estimate or 0), 0),
+        count_from=vehicle.start_date,
+    )
+
+
 def load_book(db: Session, vehicle: Vehicle, tz: ZoneInfo, today: date | None = None) -> VehicleBook:
     settings = get_settings(db)
     fuel = vehicle.fuel_type if vehicle.fuel_type in ("petrol", "diesel", "lpg") else "petrol"
@@ -86,6 +98,7 @@ def load_book(db: Session, vehicle: Vehicle, tz: ZoneInfo, today: date | None = 
         ],
         trips=[trip_data(t) for t in _active(db, Trip, vehicle.id)]
         + [idle_data(i) for i in _active(db, IdleRecord, vehicle.id)],
+        depreciation=depreciation_data(vehicle),
         kwh_per_pct=vehicle.kwh_per_pct,
         battery_usable_kwh=vehicle.battery_usable_kwh,
         default_kwh_price=settings.electricity_price,

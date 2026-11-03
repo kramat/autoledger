@@ -22,7 +22,7 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 # Columns of the report export, in this order.
 EXPORT_COLUMNS = (
     "km", "trip_km", "electricity_kwh", "fuel_l", "electricity_cost", "fuel_cost", "energy_cost",
-    "maintenance_cost", "other_cost", "total_cost", "energy_cost_per_km", "total_cost_per_km",
+    "maintenance_cost", "other_cost", "depreciation_cost", "total_cost", "energy_cost_per_km", "total_cost_per_km",
     "kwh_per_100km", "fuel_l_per_100km", "electric_share", "idle_cost", "trip_count", "charge_count",
     "refuel_count", "maintenance_count",
 )

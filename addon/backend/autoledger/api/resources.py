@@ -8,6 +8,7 @@ from ..book import load_book
 from ..charging import update_cost
 from ..db import utcnow
 from ..review import resolve_for_record
+from .attachments import decorate as with_attachments
 from .crud import ResourceSpec, crud_router, field_error
 
 
@@ -70,6 +71,7 @@ def _add_consumption(db: Session, request: Request, items: list[schemas.RefuelOu
         if interval is not None:
             item.interval_km = round(interval.km, 1)
             item.l_per_100km = round(interval.l_per_100km, 2)
+    with_attachments("refuels")(db, request, items)
 
 
 VEHICLES = ResourceSpec(
@@ -128,6 +130,7 @@ MAINTENANCE = ResourceSpec(
     order_by=(models.MaintenanceRecord.date.desc(), models.MaintenanceRecord.created_at.desc()),
     time_field="date",
     before_save=_check_schedule,
+    decorate_items=with_attachments("maintenance"),
 )
 
 EXPENSES = ResourceSpec(
@@ -138,6 +141,7 @@ EXPENSES = ResourceSpec(
     schema_out=schemas.ExpenseOut,
     order_by=(models.Expense.date.desc(), models.Expense.created_at.desc()),
     time_field="date",
+    decorate_items=with_attachments("expenses"),
 )
 
 # record_type used by review items -> resource

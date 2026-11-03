@@ -39,6 +39,10 @@ from .client import AutoLedgerAuthError, AutoLedgerClient, AutoLedgerError
 from .const import (
     API_VERSION,
     CONF_ADVANCED,
+    CONF_BOOST,
+    CONF_BOOST_MAX_PER_DAY,
+    CONF_BOOST_PERSONS,
+    CONF_BOOST_SERVICE,
     CONF_CHARGER_VEHICLE,
     CONF_ENERGY,
     CONF_EXTERNAL_CHARGE_MIN_PCT,
@@ -68,6 +72,7 @@ from .const import (
     ROLE_DISTANCE_TO_SERVICE,
     ROLE_CHARGING,
     ROLE_FUEL,
+    ROLE_FUEL_PRICE,
     ROLE_LATITUDE,
     ROLE_LONGITUDE,
     ROLE_ODOMETER,
@@ -82,6 +87,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 ADDON_SLUG = "autoledger"
 ADDON_PORT = 8099
+# Words in a car integration's service names that mean "fetch fresh data now".
+BOOST_SERVICE_WORDS = ("force_update", "refresh", "update_data", "poll")
 
 # Entity id endings that vehicle integrations commonly use, per role (first match wins).
 SUGGESTIONS: dict[str, tuple[str, ...]] = {
@@ -283,7 +290,8 @@ class VehicleSubentryFlow(_AutoLedgerSubentryFlow):
 
     async def async_step_entities(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         vehicle_type = self._vehicle.get("type", "ICE")
-        if user_input is not None:
+        errors = _boost_errors(self.hass, user_input)
+        if user_input is not None and not errors:
             data = {
                 CONF_VEHICLE_ID: self._vehicle["id"],
                 CONF_VEHICLE: _vehicle_info(self._vehicle),
@@ -292,11 +300,12 @@ class VehicleSubentryFlow(_AutoLedgerSubentryFlow):
             }
             return self.async_create_entry(title=self._vehicle["name"], data=data, unique_id=self._vehicle["id"])
 
-        suggested = _suggest(self.hass, self._odometer)
+        suggested = user_input or _suggest(self.hass, self._odometer)
         return self.async_show_form(
             step_id="entities",
             data_schema=self.add_suggested_values_to_schema(_vehicle_schema(vehicle_type), suggested),
             description_placeholders={"vehicle": self._vehicle["name"]},
+            errors=errors,
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -310,7 +319,8 @@ class VehicleSubentryFlow(_AutoLedgerSubentryFlow):
                     vehicle = _vehicle_info(latest)
             except AutoLedgerError:
                 pass
-        if user_input is not None:
+        errors = _boost_errors(self.hass, user_input)
+        if user_input is not None and not errors:
             data = {
                 CONF_VEHICLE_ID: subentry.data[CONF_VEHICLE_ID],
                 CONF_VEHICLE: vehicle,
@@ -318,10 +328,16 @@ class VehicleSubentryFlow(_AutoLedgerSubentryFlow):
             }
             return self.async_update_and_abort(self._get_entry(), subentry, data=data)
         schema = _vehicle_schema(vehicle.get("type", "ICE"), with_odometer=True)
+        suggested = user_input or dict(subentry.data)
+        if not (suggested.get(CONF_BOOST) or {}).get(CONF_BOOST_SERVICE):
+            boost = _suggest_boost(self.hass, suggested.get(ROLE_ODOMETER, ""))
+            if boost:
+                suggested[CONF_BOOST] = {**(suggested.get(CONF_BOOST) or {}), CONF_BOOST_SERVICE: boost}
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self.add_suggested_values_to_schema(schema, dict(subentry.data)),
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),
             description_placeholders={"vehicle": subentry.title},
+            errors=errors,
         )
 
 
@@ -351,6 +367,8 @@ def _vehicle_schema(vehicle_type: str, with_odometer: bool = False) -> vol.Schem
     fields[vol.Optional(ROLE_CAR_TIMESTAMP)] = _entity("sensor")
     fields[vol.Optional(ROLE_DAYS_TO_SERVICE)] = _entity("sensor")
     fields[vol.Optional(ROLE_DISTANCE_TO_SERVICE)] = _entity("sensor")
+    if vehicle_type in ("PHEV", "ICE"):
+        fields[vol.Optional(ROLE_FUEL_PRICE)] = _entity(["sensor", "input_number"])
     thresholds = {vol.Required(CONF_MIN_TRIP_KM, default=0.5): _number(0.1, 10, 0.1, "km")}
     if vehicle_type in ("PHEV", "ICE"):
         thresholds[vol.Required(CONF_REFUEL_MIN_L, default=3.0)] = _number(0.5, 50, 0.5, "L")
@@ -359,7 +377,31 @@ def _vehicle_schema(vehicle_type: str, with_odometer: bool = False) -> vol.Schem
         thresholds[vol.Required(CONF_EXTERNAL_CHARGE_MIN_PCT, default=3.0)] = _number(1, 50, 0.5, "%")
         thresholds[vol.Required(CONF_IDLE_MIN_PCT, default=1.0)] = _number(0.5, 20, 0.5, "%")
     fields[vol.Required(CONF_THRESHOLDS)] = section(vol.Schema(thresholds), {"collapsed": True})
+    boost = {
+        vol.Optional(CONF_BOOST_SERVICE): TextSelector(),
+        vol.Optional(CONF_BOOST_PERSONS): EntitySelector(EntitySelectorConfig(domain="person", multiple=True)),
+        vol.Required(CONF_BOOST_MAX_PER_DAY, default=12): _number(1, 48, 1, "×"),
+    }
+    fields[vol.Required(CONF_BOOST)] = section(vol.Schema(boost), {"collapsed": True})
     return vol.Schema(fields)
+
+
+def _boost_errors(hass: HomeAssistant, user_input: dict[str, Any] | None) -> dict[str, str]:
+    service = ((user_input or {}).get(CONF_BOOST) or {}).get(CONF_BOOST_SERVICE)
+    if not service:
+        return {}
+    domain, _, name = service.strip().partition(".")
+    return {} if hass.services.has_service(domain, name) else {"base": "unknown_service"}
+
+
+def _suggest_boost(hass: HomeAssistant, odometer_entity: str) -> str | None:
+    """A "refresh now" service of the integration the odometer belongs to, e.g. lynkco.force_update_data."""
+    entry = er.async_get(hass).async_get(odometer_entity)
+    if entry is None:
+        return None
+    services = hass.services.async_services_for_domain(entry.platform)
+    match = next((name for name in sorted(services) if any(w in name for w in BOOST_SERVICE_WORDS)), None)
+    return f"{entry.platform}.{match}" if match else None
 
 
 def _suggest(hass: HomeAssistant, odometer_entity: str) -> dict[str, Any]:
@@ -383,6 +425,9 @@ def _suggest(hass: HomeAssistant, odometer_entity: str) -> dict[str, Any]:
     fuel = hass.states.get(suggested.get(ROLE_FUEL, ""))
     if fuel is not None:
         suggested[CONF_FUEL_UNIT] = "%" if fuel.attributes.get("unit_of_measurement") == "%" else "L"
+    boost = _suggest_boost(hass, odometer_entity)
+    if boost:
+        suggested[CONF_BOOST] = {CONF_BOOST_SERVICE: boost}
     return suggested
 
 

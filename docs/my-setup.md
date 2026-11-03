@@ -21,11 +21,10 @@ Prefix: `sensor.lynk_co_l6tcx2e73ne015159_lynk_co_`
 | `address` | `…_address` | "Duinmeierij 118, Leidschendam-Voorburg" |
 | `charging_state` | `…_charge_state` | Idle |
 | `plug_state` | `…_charger_connection_status` | Disconnected |
-| `fuel_flap` | `…_tank_flap_status` | TANK_FLAP_CLOSED |
 | `running` | `binary_sensor.lynk_co_l6tcx2e73ne015159_lynk_co_vehicle_is_running` | off. Never seen as `on`, so live mode is **not** used. |
 | `car_timestamp` | `…_last_updated_by_car` | 2026-11-02T12:42:56.941Z |
 | Service countdown (shown in Maintenance) | `…_days_to_service`, `…_distance_to_service` | 654 days, 28 163 km |
-| Boost service (optional) | `lynkco.force_update_data` | — |
+| Snapshot boost | `lynkco.force_update_data`, people `person.bart_kramer` (and `person.isabella` when she drives it), 12 per day | — |
 
 Vehicle parameters:
 
@@ -42,7 +41,7 @@ This was observed in the HA history from 30 Oct to 2 Nov 2026, and it shaped the
 - **A whole drive shows up as one jump.** It went from 63 439 to 63 445 km, battery 78.0 to 66.5 % and fuel 16.4 to 16.0 L in a single update.
 - **The tracker never left `home`** during that drive, and `vehicle_is_running` never turned `on`. A round trip therefore looks like *home → home, 6.3 km*.
 
-→ **Snapshot mode** is the right trip mode. Trips are reported per segment, as round trip or one way, with an estimated start time. Optionally, *snapshot boost* can call `lynkco.force_update_data` after the lock changes, to split drives with stops into separate trips. That needs testing for its effect on the 12 V battery and the cloud rate limits.
+→ **Snapshot mode** is the right trip mode. Trips are reported per segment, as round trip or one way, with an estimated start time. *Snapshot boost* calls `lynkco.force_update_data` when the Shelly starts or stops charging and when someone leaves or comes home. That action only reads the Lynk cloud and does not wake the car. On 3 Nov the integration's 2-hour poll ended a 2.5 km drive at 19:42 instead of 17:12, overlapping the home charge; boost fixes exactly that.
 
 ### Collector setup for the Lynk
 

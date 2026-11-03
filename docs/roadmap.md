@@ -8,7 +8,7 @@ Each milestone ends with something usable. The manual workflow comes first, so t
 | **M2: Collector, charging & fuel** ✅ built | Collector config flow (discovery + manual), vehicle and charger subentries, snapshot builder, home charge detector with per-increment pricing, refuel and external charge detection, outbox, ingest API, review inbox, summary sensors | A night charge on the Shelly shows up with correct kWh and € even when the power sensor flaps. A refuel of the Lynk ends up in the review inbox. |
 | **M3: Trips** ✅ built | Trip detector (snapshot mode), idle records, kWh-per-% learning, battery/tank cost basis, trips page with map, merge/split, backfill service | Every Lynk drive appears with km, kWh, L and €. The 2 Nov example reproduces the numbers in [costs.md](costs.md#worked-example-lynk--co-2-nov-2026). |
 | **M4: Insight** ✅ built | Reports (period, compare, trends), maintenance schedules and reminders, fuel reconciliation (built in M3), XLSX export, JSON backup/restore, CSV import | Year report for both cars, and maintenance reminders as HA sensors |
-| **M5: Extras** | Snapshot boost, live trip mode, receipt photo attachments, recurring expenses + depreciation, fuel price entity support | — |
+| **M5: Extras** ✅ built | Snapshot boost, receipt photo attachments, depreciation (recurring expenses were built in M1), fuel price entity support. Live trip mode left out. | Receipts on refuels and invoices on maintenance; trips that end when the car parks |
 
 ## M1 as built (2 Nov 2026)
 
@@ -27,6 +27,20 @@ Each milestone ends with something usable. The manual workflow comes first, so t
   - the image has not been built by a real Supervisor yet; that happens on first install;
   - no CSV import yet (M4), so old data is entered by hand with back-dated dates;
   - maintenance schedules and reminders follow in M4.
+
+## M5 as built (3 Nov 2026)
+
+- **Add-on 0.5.0:**
+  - migration 0005: `attachments` (per resource and record, file under `/data/attachments/`), and `resale_estimate`, `resale_date`, `depreciation_enabled` on vehicles, added with plain `ADD COLUMN` (a batch copy of `vehicles` fails on its foreign keys);
+  - `/attachments`: raw-body upload (no multipart dependency), inline serving with `nosniff`, soft delete with undo; refuels, maintenance and expenses list their attachments; `/backup?attachments=true` includes the files, `/restore` writes them back when the checksum matches;
+  - depreciation in the ledger (`depreciation_cost`, part of `total_cost`), straight-line per month from the tracking start, in the summary, reports and exports;
+  - GUI: *Add photo or PDF* in the refuel, maintenance and cost dialogs (photos over 1.5 MB shrunk to a 2000 px JPEG in the browser), a 📎 column, ownership fields on Vehicles, *Depreciation* in the overview and reports (it shares the "Other" bar in charts: four colors only), backup with files;
+  - fix: the screen-reader "Actions" table headers widened every page with a table to 980 px on phones.
+- **Collector 0.5.0:**
+  - snapshot boost on local hints: home charger start (at once) and stop (+2 min), a chosen person leaving (at once) or arriving home (+2 and +10 min); one call per minute at most, `boost_max_per_day` per local day, decisions in the diagnostics; the action is suggested from the odometer's integration and checked when saving;
+  - `fuel_price` role: the entity's €/L becomes the suggested price of a detected refuel.
+- **Tests:** 99 add-on tests (depreciation math and API, attachments, backup with files) and 34 Collector engine tests (boost limits and presence hints). The dev database migrated from 0004 to 0005 with its backup and no schema difference to the models.
+- **Not built:** live trip mode (the Lynk's `running` never changes), the `fuel_flap` role, refining an estimated trip start with an average speed, and recurring expenses in the CSV import. Snapshot boost has not run in a real Home Assistant yet.
 
 ## M4 as built (3 Nov 2026)
 

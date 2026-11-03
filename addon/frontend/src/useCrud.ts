@@ -58,13 +58,15 @@ export function useCrud<T extends { id: string }>(
     dialog.value = { mode: 'edit', initial: { ...row }, id: row.id }
   }
 
-  async function save(data: Record<string, unknown>): Promise<void> {
+  async function save(data: Record<string, unknown>): Promise<T | undefined> {
     const current = dialog.value
-    if (!current) return
-    if (current.mode === 'create') await api.create(resource, data)
-    else await api.update(resource, current.id!, data)
+    if (!current) return undefined
+    const saved = current.mode === 'create'
+      ? await api.create<T>(resource, data)
+      : await api.update<T>(resource, current.id!, data)
     await changed()
     toast(`${options.noun} ${current.mode === 'create' ? 'added' : 'saved'}`)
+    return saved
   }
 
   return { items, loading, error, dialog, load, remove, openCreate, openEdit, save }

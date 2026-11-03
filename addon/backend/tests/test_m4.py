@@ -231,7 +231,7 @@ def test_backup_restores_into_an_empty_add_on(client, vw_up, tmp_path):
     add(client, "maintenance-schedules", vehicle_id=vw_up["id"], name="APK", interval_months=12,
         last_done_date="2026-05-01")
     backup = client.get(f"{API}/backup").json()
-    assert backup["format"] == "autoledger-backup" and backup["schema_revision"] == "0004"
+    assert backup["format"] == "autoledger-backup" and backup["schema_revision"] == "0005"
     assert len(backup["tables"]["refuels"]) == 4
 
     fresh = create_app(make_config(tmp_path / "other"))

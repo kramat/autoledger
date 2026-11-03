@@ -32,6 +32,7 @@ const restoreMode = ref<'empty' | 'merge'>('empty')
 const restoreResult = ref<RestoreResult | null>(null)
 const restoreError = ref('')
 const restoring = ref(false)
+const withFiles = ref(false)
 
 function pickBackup(event: Event): void {
   restoreFile.value = (event.target as HTMLInputElement).files?.[0] ?? null
@@ -167,10 +168,15 @@ onMounted(async () => {
       <h2>Backup</h2>
       <p class="small muted">
         A full JSON backup of everything in AutoLedger, to move to another installation. Home Assistant backups include
-        the add-on's database as well. The API token is not in the file.
+        the add-on's database and receipt files as well. The API token is not in the file.
       </p>
+      <label class="field checkbox" style="margin: 0 0 12px">
+        <input v-model="withFiles" type="checkbox" />
+        <span>Include receipt photos and invoices<small class="hint checkbox-hint">Makes the file larger. Without
+            them, a restore keeps the list of attachments but not the files.</small></span>
+      </label>
       <div class="button-row">
-        <a :href="api.backupUrl()" download><button type="button">Download backup</button></a>
+        <a :href="api.backupUrl(withFiles)" download><button type="button">Download backup</button></a>
       </div>
       <h3 style="margin: 16px 0 8px">Restore</h3>
       <div class="form-grid" style="margin: 0 0 12px">
@@ -193,7 +199,8 @@ onMounted(async () => {
       <p v-if="restoreError" class="notice error" style="margin-top: 12px">{{ restoreError }}</p>
       <p v-if="restoreResult" class="notice" style="margin-top: 12px">
         Restored {{ restoredCount(restoreResult) }} records<template v-if="skippedCount(restoreResult)">;
-          {{ skippedCount(restoreResult) }} were already here</template>.
+          {{ skippedCount(restoreResult) }} were already here</template><template
+          v-if="restoreResult.files?.written">, and {{ restoreResult.files.written }} receipt files</template>.
       </p>
     </section>
 

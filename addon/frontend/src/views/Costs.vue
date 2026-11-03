@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { api, type Expense } from '../api'
 import DataTable, { type Column } from '../components/DataTable.vue'
+import { clip } from '../attachments'
 import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDate, isoDate, money } from '../format'
@@ -25,6 +26,7 @@ const columns = computed<Column<Expense>[]>(() => [
   { key: 'amount', label: 'Amount', num: true, value: (e) => money(e.amount) },
   { key: 'repeats', label: 'Repeats', value: repeats },
   { key: 'note', label: 'Note', wrap: true, value: (e) => e.note ?? '' },
+  { key: 'receipt', label: 'Receipt', value: clip },
 ])
 
 const recurring = (values: Record<string, unknown>) => values.recurrence != null
@@ -64,6 +66,6 @@ function add(): void {
     </p>
     <RecordDialog v-if="crud.dialog.value" :title="crud.dialog.value.mode === 'create' ? 'Add cost' : 'Edit cost'"
       :fields="fields" :initial="crud.dialog.value.initial" :mode="crud.dialog.value.mode" :save="crud.save"
-      @close="crud.dialog.value = null" />
+      attachments="expenses" @changed="crud.load" @close="crud.dialog.value = null" />
   </div>
 </template>

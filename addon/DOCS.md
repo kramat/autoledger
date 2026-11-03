@@ -33,6 +33,12 @@ With the AutoLedger Collector 0.4.0, each car gets `sensor.<car>_next_maintenanc
 
 **Reports** shows a calendar year (or any period) per month, quarter or year, with the cars side by side. *Per year* figures scale the period to 365 days, so a car with a shorter history compares fairly. Below that are monthly trends of € per km and consumption, and consumption per season. **Export XLSX / CSV** downloads the report.
 
+## Receipts and depreciation
+
+**Receipts.** In the dialog of a refuel, a maintenance entry or a cost, **Add photo or PDF** attaches a receipt or invoice. On a phone this offers the camera. Photos over 1.5 MB are made smaller (2000 px JPEG) before they are uploaded; PDFs and HEIC photos are kept as they are, up to 20 MB. A 📎 in the table marks records with a receipt.
+
+**Depreciation.** On **Vehicles**, fill in the purchase price and date, the expected resale value and date, and tick *Count depreciation in the costs*. The loss of value (purchase − resale) is spread evenly over the months in between and counted from the vehicle's tracking start up to today, as a separate *Depreciation* line in the overview and the reports. It is included in the total cost and €/km, so switch it off when you only want running costs.
+
 ## Data and backups
 
 Everything is stored in the add-on's data folder and included in Home Assistant backups. Before each database upgrade, the add-on also makes a copy in `backups/` inside that folder.
@@ -41,4 +47,4 @@ Under **Settings**:
 
 - **Export**: all records as one Excel workbook, or one CSV per type.
 - **Import CSV**: refuels, maintenance, odometer readings or other costs from a spreadsheet. The preview shows how each row is read (columns, decimal comma, day-first dates) before anything is saved, and rows that are already there are skipped.
-- **Backup**: a JSON file with everything, to move to another installation. **Restore** loads it into an empty add-on, or adds only the records that are missing. The current database is copied to `backups/` first.
+- **Backup**: a JSON file with everything, to move to another installation. Tick *Include receipt photos and invoices* to put the files in it too (the file gets larger); without it, a restore keeps the list of receipts but not the files. **Restore** loads it into an empty add-on, or adds only the records that are missing. The current database is copied to `backups/` first.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Receipt photos and invoices: attach a photo or PDF to a refuel, a maintenance entry or a cost, from your phone's
+  camera or files. Large photos are made smaller before upload. Tables show a 📎 for records with a receipt.
+- Depreciation: with a purchase price and date, and an expected resale value and date, a vehicle can count its loss of
+  value in the costs, the same amount every month from the tracking start on. Off by default, per vehicle.
+- Backups can include the receipt files (Settings → Backup → *Include receipt photos and invoices*).
+- Fix: on phones, pages with a table could scroll a little sideways.
+- Collector 0.5.0: *snapshot boost* asks the car's integration for fresh data when the home charger starts or stops
+  and when someone leaves or comes home, and a fuel price entity can suggest the price of detected refuels.
+
 ## 0.4.0
 
 - Maintenance schedules: *every 12 months or 15 000 km*, *APK yearly*. Logged maintenance moves a schedule

@@ -29,10 +29,25 @@ export interface Vehicle extends RecordBase {
   start_date: string
   purchase_price: number | null
   purchase_date: string | null
+  resale_estimate: number | null
+  resale_date: string | null
+  depreciation_enabled: boolean
   kwh_per_pct: number | null
   color: string | null
   note: string | null
   archived_at: string | null
+}
+
+export type AttachmentResource = 'refuels' | 'maintenance' | 'expenses'
+
+export interface Attachment {
+  id: string
+  resource: AttachmentResource
+  record_id: string
+  filename: string
+  mime_type: string
+  size: number
+  created_at: string
 }
 
 export interface Refuel extends RecordBase {
@@ -49,6 +64,7 @@ export interface Refuel extends RecordBase {
   status: string
   interval_km: number | null
   l_per_100km: number | null
+  attachments: Attachment[]
 }
 
 export type PriceMode = 'samples' | 'per_kwh' | 'total' | 'free'
@@ -172,6 +188,7 @@ export interface MaintenanceRecord extends RecordBase {
   cost: number
   schedule_id: string | null
   note: string | null
+  attachments: Attachment[]
 }
 
 export type DueStatus = 'ok' | 'soon' | 'overdue' | 'unknown'
@@ -232,6 +249,7 @@ export interface Expense extends RecordBase {
   recurrence: 'monthly' | 'quarterly' | 'yearly' | null
   end_date: string | null
   note: string | null
+  attachments: Attachment[]
 }
 
 export interface Settings {
@@ -249,6 +267,7 @@ export interface Totals {
   electricity_cost: number
   maintenance_cost: number
   other_cost: number
+  depreciation_cost: number
   energy_cost: number
   total_cost: number
   energy_cost_per_km: number | null
@@ -319,6 +338,7 @@ export interface PerYear {
   energy_cost: number | null
   maintenance_cost: number | null
   other_cost: number | null
+  depreciation_cost: number | null
 }
 
 export interface GroupTotals extends Totals {
@@ -397,6 +417,7 @@ export interface ImportPreview {
 export interface RestoreResult {
   mode: 'empty' | 'merge'
   tables: Record<string, { inserted: number; skipped: number }>
+  files?: { written: number; skipped: number }
 }
 
 export interface Info {
@@ -484,8 +505,26 @@ export const api = {
   reportPeriod: (params: Params) => request<PeriodReport>('GET', '/reports/period', undefined, params),
   reportTrends: (params: Params) => request<Trends>('GET', '/reports/trends', undefined, params),
   reportExportUrl: (format: 'csv' | 'xlsx', params: Params) => url(`/reports/period.${format}`, params),
-  backupUrl: () => url('/backup'),
+  backupUrl: (attachments = false) => url('/backup', { attachments: attachments || undefined }),
   restoreBackup: (data: unknown, mode: 'empty' | 'merge') => request<RestoreResult>('POST', '/restore', data, { mode }),
   importCsv: (body: ImportRequest, commit = false) =>
     request<ImportPreview>('POST', '/import/csv', body, { commit: commit || undefined }),
+  attachments: (resource: AttachmentResource, recordId: string) =>
+    request<Attachment[]>('GET', '/attachments', undefined, { resource, record_id: recordId }),
+  uploadAttachment,
+  removeAttachment: (id: string) => request<void>('DELETE', `/attachments/${id}`),
+  restoreAttachment: (id: string) => request<Attachment>('POST', `/attachments/${id}/restore`),
+  attachmentUrl: (id: string, download = false) => url(`/attachments/${id}/file`, { download: download || undefined }),
+}
+
+/** The file is the request body (no multipart); its type goes in Content-Type. */
+async function uploadAttachment(resource: AttachmentResource, recordId: string, file: Blob, filename: string): Promise<Attachment> {
+  const response = await fetch(url('/attachments', { resource, record_id: recordId, filename }), {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw new ApiError(data?.error?.message ?? response.statusText, response.status)
+  return data as Attachment
 }

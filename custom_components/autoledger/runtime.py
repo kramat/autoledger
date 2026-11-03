@@ -25,6 +25,10 @@ from homeassistant.util import dt as dt_util
 from .client import AutoLedgerClient, AutoLedgerError
 from .const import (
     CONF_ADVANCED,
+    CONF_BOOST,
+    CONF_BOOST_MAX_PER_DAY,
+    CONF_BOOST_PERSONS,
+    CONF_BOOST_SERVICE,
     CONF_CHARGER_VEHICLE,
     CONF_ENERGY,
     CONF_EXTERNAL_CHARGE_MIN_PCT,
@@ -56,6 +60,7 @@ from .const import (
     ROLE_DISTANCE_TO_SERVICE,
     ROLE_CHARGING,
     ROLE_FUEL,
+    ROLE_FUEL_PRICE,
     ROLE_LATITUDE,
     ROLE_LONGITUDE,
     ROLE_ODOMETER,
@@ -72,6 +77,7 @@ from .const import (
     VEHICLE_ROLES,
     VERSION,
 )
+from .engine.boost import HINT_DELAYS, boost_allowed, presence_hint
 from .engine.charging import ChargerParams, ChargeSessionMachine, SessionEvent
 from .engine.detect import VehicleParams, detect
 from .engine.maintenance import maintenance_notifications
@@ -275,7 +281,14 @@ class VehicleTracker:
         self.fuel_unit = data.get(CONF_FUEL_UNIT, "L")
         self.roles: dict[str, str] = {role: data[role] for role in VEHICLE_ROLES if data.get(role)}
         self.service_roles: dict[str, str] = {role: data[role] for role in SERVICE_ROLES if data.get(role)}
+        self.fuel_price_entity: str | None = data.get(ROLE_FUEL_PRICE) or None
+        boost = data.get(CONF_BOOST) or {}
+        self.boost_service: str | None = (boost.get(CONF_BOOST_SERVICE) or "").strip() or None
+        self.boost_persons: list[str] = list(boost.get(CONF_BOOST_PERSONS) or [])
+        self.boost_max_per_day = int(boost.get(CONF_BOOST_MAX_PER_DAY, 12))
         self._unsub: Callable[[], None] | None = None
+        self._unsub_persons: Callable[[], None] | None = None
+        self._boost_timers: list[Callable[[], None]] = []
         self._pending: Callable[[], None] | None = None
         self._get: Callable[[str], State | None] = self.hass.states.get  # swapped during backfill
 
@@ -314,13 +327,20 @@ class VehicleTracker:
         # at snapshot time, so its change between two car reports is the home energy.
         self._unsub = async_track_state_change_event(self.hass, list(self.roles.values()), self._changed)
         self._pending = async_call_later(self.hass, 10, self._take_snapshot)
+        if self.boost_service and self.boost_persons:
+            self._unsub_persons = async_track_state_change_event(self.hass, self.boost_persons, self._person_changed)
 
     @callback
     def stop(self) -> None:
         if self._unsub:
             self._unsub()
+        if self._unsub_persons:
+            self._unsub_persons()
         if self._pending:
             self._pending()
+        for cancel in self._boost_timers:
+            cancel()
+        self._boost_timers.clear()
 
     @callback
     def _changed(self, event: Event[EventStateChangedData]) -> None:
@@ -329,6 +349,61 @@ class VehicleTracker:
         if self._pending:
             self._pending()
         self._pending = async_call_later(self.hass, SNAPSHOT_DEBOUNCE, self._take_snapshot)
+
+    # --- snapshot boost ---------------------------------------------------
+
+    @callback
+    def _person_changed(self, event: Event[EventStateChangedData]) -> None:
+        old, new = event.data["old_state"], event.data["new_state"]
+        hint = presence_hint(old.state if old else None, new.state if new else None)
+        if hint:
+            name = new.name if new else event.data["entity_id"]
+            self.hint(hint, f"{name} {hint.replace('_', ' ')}")
+
+    @callback
+    def hint(self, kind: str, reason: str) -> None:
+        """A drive probably started or ended: refresh the car's data (when boost is set up)."""
+        if not self.boost_service:
+            return
+        for delay in HINT_DELAYS[kind]:
+            if delay == 0:
+                self._boost(reason)
+                continue
+
+            handle: list[Callable[[], None]] = []
+
+            @callback
+            def _later(_now, reason=reason, delay=delay, handle=handle) -> None:
+                if handle and handle[0] in self._boost_timers:
+                    self._boost_timers.remove(handle[0])
+                self._boost(f"{reason}, +{delay // 60} min")
+
+            handle.append(async_call_later(self.hass, delay, _later))
+            self._boost_timers.append(handle[0])
+
+    @callback
+    def _boost(self, reason: str) -> None:
+        domain, _, service = (self.boost_service or "").partition(".")
+        if not self.hass.services.has_service(domain, service):
+            self.runtime.log(f"{self.name}: boost skipped ({reason}): {self.boost_service} does not exist")
+            return
+        now = dt_util.utcnow()
+        allowed, memory, why = boost_allowed(
+            self.state.get("boost") or {}, now, dt_util.now().date().isoformat(), self.boost_max_per_day
+        )
+        if not allowed:
+            self.runtime.log(f"{self.name}: boost skipped ({reason}): {why}")
+            return
+        self.state["boost"] = memory
+        self.runtime.save_soon()
+        self.runtime.log(f"{self.name}: boost {memory['count']}/{self.boost_max_per_day} today ({reason})")
+        self.hass.async_create_task(self._call_boost(domain, service))
+
+    async def _call_boost(self, domain: str, service: str) -> None:
+        try:
+            await self.hass.services.async_call(domain, service, {}, blocking=True)
+        except Exception as err:  # noqa: BLE001 - a failing refresh must not break tracking
+            _LOGGER.warning("%s: %s.%s failed: %s", self.name, domain, service, err)
 
     # --- reading HA states ------------------------------------------------
 
@@ -415,9 +490,20 @@ class VehicleTracker:
 
         for found in detect(previous, snapshot, self.params):
             self.runtime.log(f"{self.name}: {found.type} ({found.reason})")
-            self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, found.payload)
+            payload = found.payload
+            if found.type == "refuel.detected":
+                payload = {**payload, **self._fuel_price()}
+            self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, payload)
         self._commit(snapshot)
         self._send_pending_soc(snapshot)
+
+    def _fuel_price(self) -> dict:
+        """The mapped fuel price entity's €/L, as the suggested price of a detected refuel."""
+        state = self.hass.states.get(self.fuel_price_entity or "")
+        price = parse_float(state.state if state else None)
+        if price is None or not 0.3 <= price <= 10:
+            return {}
+        return {"suggested_price_per_l": round(price, 4), "price_source": "entity"}
 
     def _send_service_status(self, snapshot: Snapshot) -> None:
         """Pass the car's own service countdown to the add-on when it changed."""
@@ -619,6 +705,10 @@ class ChargerTracker:
         vehicle = self.vehicle
         for event in events:
             payload = dict(event.payload)
+            if vehicle is not None and event.type in ("charge.started", "charge.completed"):
+                started = event.type == "charge.started"
+                vehicle.hint("charge_started" if started else "charge_stopped",
+                             f"{self.name} {'started' if started else 'stopped'} charging")
             if event.type == "charge.completed" and vehicle is not None:
                 soc_start = vehicle.soc_at(payload["start_ts"])
                 if soc_start is not None:

@@ -148,7 +148,8 @@ A manual vehicle has no trips to spread fuel over. Its fuel cost is therefore co
 ## Recurring expenses and depreciation
 
 - A recurring expense of amount *A* with interval *n* months adds `A / n` to every month in its active range. A yearly € 600 insurance becomes € 50 per month.
-- Depreciation: `(purchase_price − expected_resale) / months_between(purchase_date, expected_resale_date)` per month. It is off by default and can be switched on per vehicle.
+- Depreciation: `(purchase_price − expected_resale) / months_between(purchase_date, expected_resale_date)` per month, pro rata for partial months, so the months from purchase to resale add up to exactly the loss of value. It is counted from the vehicle's tracking start (`start_date`) up to today, like every other figure, and shown as `depreciation_cost`, part of `total_cost`. It is off by default and can be switched on per vehicle.
+  Example: bought for € 45 000 on 1 Jun 2022, resale € 15 000 on 1 Jun 2029: 84 months, € 357.14 per month. Tracked from 1 Oct 2026, the 2026 report has October and 1–3 November: € 357.14 + € 35.71.
 
 ## Recalculation
 

@@ -3,8 +3,10 @@
 // In edit mode only the fields the user changed are sent, so the API can
 // recalculate dependent values (for example a refuel's price after the total changes).
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { ApiError } from '../api'
+import { ApiError, api, type AttachmentResource } from '../api'
+import { shrink } from '../attachments'
 import { fromLocalInput, toLocalInput } from '../format'
+import AttachmentList from './AttachmentList.vue'
 import type { Field } from './fields'
 
 const props = defineProps<{
@@ -12,9 +14,13 @@ const props = defineProps<{
   fields: Field[]
   initial: Record<string, unknown>
   mode: 'create' | 'edit'
-  save: (data: Record<string, unknown>) => Promise<void>
+  save: (data: Record<string, unknown>) => Promise<{ id: string } | void>
+  // Records that can carry receipt photos and invoices.
+  attachments?: AttachmentResource
 }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; changed: [] }>()
+const pending = ref<File[]>([])
+const recordId = typeof props.initial.id === 'string' ? props.initial.id : null
 
 function toForm(field: Field, value: unknown): unknown {
   if (value === null || value === undefined) return field.type === 'checkbox' ? false : field.type === 'select' ? null : ''
@@ -60,7 +66,14 @@ async function submit(): Promise<void> {
   }
   busy.value = true
   try {
-    await props.save(data)
+    const saved = await props.save(data)
+    if (props.attachments && saved && pending.value.length) {
+      for (const file of pending.value) {
+        const small = await shrink(file)
+        await api.uploadAttachment(props.attachments, saved.id, small, small.name)
+      }
+      emit('changed')
+    }
     emit('close')
   } catch (err) {
     if (err instanceof ApiError) {
@@ -90,7 +103,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <template v-for="f in visibleFields" :key="f.key">
           <label v-if="f.type === 'checkbox'" class="field checkbox" :class="{ half: f.half }">
             <input type="checkbox" v-model="values[f.key]" />
-            <span>{{ f.label }}</span>
+            <span>{{ f.label }}<small v-if="f.hint" class="hint checkbox-hint">{{ f.hint }}</small></span>
           </label>
           <label v-else class="field" :class="{ half: f.half, invalid: errors[f.key] }">
             <span>{{ f.label }}<template v-if="f.required"> *</template></span>
@@ -107,6 +120,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           </label>
         </template>
       </div>
+      <AttachmentList v-if="attachments" v-model:pending="pending" :resource="attachments" :record-id="recordId"
+        @changed="emit('changed')" />
       <p v-if="message" class="notice error">{{ message }}</p>
       <div class="dialog-actions">
         <button type="button" @click="emit('close')">Cancel</button>

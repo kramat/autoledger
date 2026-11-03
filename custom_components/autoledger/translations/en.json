@@ -74,12 +74,14 @@
             "plug_state": "Charging cable connected",
             "car_timestamp": "Time the car last reported",
             "days_to_service": "Days to service (the car's own countdown)",
-            "distance_to_service": "Distance to service (the car's own countdown)"
+            "distance_to_service": "Distance to service (the car's own countdown)",
+            "fuel_price": "Fuel price (€/L)"
           },
           "data_description": {
             "car_timestamp": "Cloud-connected cars report with a delay. With this, records get the car's own time.",
             "fuel_unit": "Litres, or % of the tank (the tank size from the add-on is used to convert).",
-            "days_to_service": "Shown next to your maintenance schedules in AutoLedger as a cross-check."
+            "days_to_service": "Shown next to your maintenance schedules in AutoLedger as a cross-check.",
+            "fuel_price": "Used as the suggested price of a detected refuel. Without it, the price of your last refuel is suggested."
           },
           "sections": {
             "thresholds": {
@@ -90,6 +92,18 @@
                 "external_charge_min_pct": "Public charge when the battery rises at least",
                 "idle_min_pct": "Climate & standby when the parked battery drops at least",
                 "idle_min_l": "Climate & standby when the parked tank drops at least"
+              }
+            },
+            "boost": {
+              "name": "Snapshot boost (fresh car data on local hints)",
+              "description": "Cloud cars upload when they park, but Home Assistant only sees it at the integration's next poll. With a refresh service, the Collector asks for fresh data when the home charger starts or stops, and when one of the people below leaves or arrives home. That gives trips the right start and end.",
+              "data": {
+                "boost_service": "Refresh service",
+                "boost_persons": "People whose leaving or arriving home hints a drive",
+                "boost_max_per_day": "At most this many refreshes per day"
+              },
+              "data_description": {
+                "boost_service": "Action of the car's integration that fetches fresh data, for example lynkco.force_update_data. Leave empty to switch boost off."
               }
             }
           }
@@ -110,7 +124,8 @@
             "plug_state": "Charging cable connected",
             "car_timestamp": "Time the car last reported",
             "days_to_service": "Days to service (the car's own countdown)",
-            "distance_to_service": "Distance to service (the car's own countdown)"
+            "distance_to_service": "Distance to service (the car's own countdown)",
+            "fuel_price": "Fuel price (€/L)"
           },
           "sections": {
             "thresholds": {
@@ -122,10 +137,23 @@
                 "idle_min_pct": "Climate & standby when the parked battery drops at least",
                 "idle_min_l": "Climate & standby when the parked tank drops at least"
               }
+            },
+            "boost": {
+              "name": "Snapshot boost (fresh car data on local hints)",
+              "description": "Cloud cars upload when they park, but Home Assistant only sees it at the integration's next poll. With a refresh service, the Collector asks for fresh data when the home charger starts or stops, and when one of the people below leaves or arrives home. That gives trips the right start and end.",
+              "data": {
+                "boost_service": "Refresh service",
+                "boost_persons": "People whose leaving or arriving home hints a drive",
+                "boost_max_per_day": "At most this many refreshes per day"
+              },
+              "data_description": {
+                "boost_service": "Action of the car's integration that fetches fresh data, for example lynkco.force_update_data. Leave empty to switch boost off."
+              }
             }
           },
           "data_description": {
-            "days_to_service": "Shown next to your maintenance schedules in AutoLedger as a cross-check."
+            "days_to_service": "Shown next to your maintenance schedules in AutoLedger as a cross-check.",
+            "fuel_price": "Used as the suggested price of a detected refuel. Without it, the price of your last refuel is suggested."
           }
         }
       },
@@ -134,6 +162,9 @@
         "cannot_connect": "Cannot reach the AutoLedger add-on.",
         "no_vehicles": "All vehicles of the add-on are already linked. Add a vehicle in the AutoLedger panel first.",
         "reconfigure_successful": "Vehicle updated."
+      },
+      "error": {
+        "unknown_service": "This action does not exist in Home Assistant. Use the domain.action form, for example lynkco.force_update_data."
       }
     },
     "charger": {

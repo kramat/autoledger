@@ -30,7 +30,7 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 ## Tables
 
 ### `vehicles`
-`name`, `plate`, `make`, `model`, `year`, `type` (`ICE`/`PHEV`/`BEV`), `fuel_type`, `tank_l`, `battery_usable_kwh`, `tracking` (`collector`/`manual`), `start_odometer_km`, `start_date`, `start_battery_value`, `start_tank_value`, `purchase_price`, `purchase_date`, `resale_estimate`, `resale_date`, `depreciation_enabled`, `color`, `icon`, `archived_at`
+`name`, `plate`, `make`, `model`, `year`, `type` (`ICE`/`PHEV`/`BEV`), `fuel_type`, `tank_l`, `battery_usable_kwh`, `tracking` (`collector`/`manual`), `start_odometer_km`, `start_date`, `start_battery_value`, `start_tank_value`, `purchase_price`, `purchase_date`, `resale_estimate`, `resale_date`, `depreciation_enabled` (the last three from M5), `color`, `icon`, `archived_at`
 
 ### `trips`
 `vehicle_id`, `start_ts`, `start_ts_estimated`, `end_ts`, `start_lat`, `start_lon`, `start_address`, `start_zone`, `end_lat`, `end_lon`, `end_address`, `end_zone`, `kind` (`one_way`/`round_trip`), `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`/`manual`), `battery_start_pct`, `battery_end_pct`, `battery_used_pct` (start − end; summed when merged), `charged_kwh` (charged within the window), `energy_kwh` (only when set by hand), `fuel_start_l`, `fuel_end_l`, `fuel_l` (raw drop of the gauge), `origin` (JSON: `merged_from` or `split_from`), `note`. Energy, reconciled litres and cost are derived by the ledger, not stored.
@@ -57,7 +57,7 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 `vehicle_id`, `category`, `amount`, `date` (one-off) **or** `recurrence` (`monthly`/`quarterly`/`yearly`) with `start_date` and `end_date`, `note`, `attachment_id`
 
 ### `attachments`
-`filename`, `mime_type`, `size`, `path` (under `/data/attachments/`), `sha256`
+`resource` (`refuels`/`maintenance`/`expenses`), `record_id`, `filename`, `mime_type`, `size`, `sha256`. The file is `/data/attachments/<id>`. A record can have several (M5, migration 0005). Deleting one is a soft delete; the file stays.
 
 ### `review_items`
 `vehicle_id`, `record_type`, `record_id`, `reason`, `details` (JSON), `resolved_at`, `resolution` (JSON)

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api, type MaintenanceRecord, type MaintenanceSchedule, type ScheduleDue, type VehicleDue } from '../api'
 import DataTable, { type Column } from '../components/DataTable.vue'
+import { clip } from '../attachments'
 import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDate, isoDate, km, money, num } from '../format'
@@ -40,6 +41,7 @@ const columns = computed<Column<MaintenanceRecord>[]>(() => [
   { key: 'description', label: 'Description', wrap: true, value: (r) => r.description },
   { key: 'schedule', label: 'Schedule', wrap: true, value: (r) => scheduleName(r.schedule_id) },
   { key: 'garage', label: 'Garage', wrap: true, value: (r) => r.garage ?? '' },
+  { key: 'invoice', label: 'Invoice', value: clip },
   { key: 'odometer', label: 'Odometer', num: true, value: (r) => km(r.odometer_km) },
   { key: 'cost', label: 'Cost', num: true, value: (r) => money(r.cost) },
 ])
@@ -227,7 +229,7 @@ const inactive = computed(() => schedules.items.value.filter((s) => !s.active))
     <RecordDialog v-if="crud.dialog.value"
       :title="crud.dialog.value.mode === 'create' ? 'Add maintenance' : 'Edit maintenance'" :fields="fields"
       :initial="crud.dialog.value.initial" :mode="crud.dialog.value.mode" :save="crud.save"
-      @close="crud.dialog.value = null" />
+      attachments="maintenance" @changed="crud.load" @close="crud.dialog.value = null" />
     <RecordDialog v-if="schedules.dialog.value"
       :title="schedules.dialog.value.mode === 'create' ? 'Add schedule' : 'Edit schedule'" :fields="scheduleFields"
       :initial="schedules.dialog.value.initial" :mode="schedules.dialog.value.mode" :save="schedules.save"

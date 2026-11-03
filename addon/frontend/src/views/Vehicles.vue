@@ -53,6 +53,10 @@ const fields: Field[] = [
   { key: 'start_odometer_km', label: 'Odometer on that date (km)', type: 'number', min: 0, required: true, half: true },
   { key: 'purchase_date', label: 'Purchase date', type: 'date', half: true },
   { key: 'purchase_price', label: 'Purchase price', type: 'number', min: 0, half: true },
+  { key: 'resale_date', label: 'Expected resale date', type: 'date', half: true },
+  { key: 'resale_estimate', label: 'Expected resale value', type: 'number', min: 0, half: true },
+  { key: 'depreciation_enabled', label: 'Count depreciation in the costs', type: 'checkbox',
+    hint: '(Purchase − resale) spread evenly over the months in between, counted from the tracking start up to today.' },
   { key: 'color', label: 'Chart colour', type: 'color', half: true },
   { key: 'note', label: 'Note', type: 'textarea' },
 ]
@@ -66,11 +70,11 @@ function add(): void {
   })
 }
 
-async function saveVehicle(data: Record<string, unknown>): Promise<void> {
+async function saveVehicle(data: Record<string, unknown>): Promise<Vehicle | undefined> {
   // An electric car has no fuel; the field is hidden, so send it explicitly.
   if (data.type === 'BEV') data.fuel_type = 'none'
   else if (data.type && crud.dialog.value?.initial.fuel_type === 'none' && !data.fuel_type) data.fuel_type = 'petrol'
-  await crud.save(data)
+  return crud.save(data)
 }
 
 async function toggleArchive(v: Vehicle): Promise<void> {

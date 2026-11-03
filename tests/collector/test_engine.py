@@ -266,3 +266,37 @@ def test_maintenance_done_starts_a_new_cycle():
     assert memory == {}
     fire, _memory = maintenance_notifications([_item("soon", "2028-01-15")], memory)
     assert len(fire) == 1
+
+
+# --- Snapshot boost -------------------------------------------------------
+
+
+def test_boost_daily_limit_and_gap():
+    from custom_components.autoledger.engine.boost import boost_allowed
+
+    now = ts("2026-11-03T17:18:00")
+    ok, memory, _ = boost_allowed({}, now, "2026-11-03", max_per_day=2)
+    assert ok and memory["count"] == 1
+    # A second hint 30 s later (two phones arriving together) gives no extra call.
+    ok, same, why = boost_allowed(memory, now + timedelta(seconds=30), "2026-11-03", max_per_day=2)
+    assert not ok and same == memory and "minute" in why
+    ok, memory, _ = boost_allowed(memory, now + timedelta(minutes=2), "2026-11-03", max_per_day=2)
+    assert ok and memory["count"] == 2
+    ok, _, why = boost_allowed(memory, now + timedelta(hours=1), "2026-11-03", max_per_day=2)
+    assert not ok and "limit" in why
+    # The count starts again the next local day.
+    ok, memory, _ = boost_allowed(memory, now + timedelta(hours=8), "2026-11-04", max_per_day=2)
+    assert ok and memory == {"day": "2026-11-04", "count": 1, "last": (now + timedelta(hours=8)).isoformat()}
+
+
+def test_presence_hints_ignore_unavailable():
+    from custom_components.autoledger.engine.boost import presence_hint
+
+    assert presence_hint("home", "not_home") == "left_home"
+    assert presence_hint("not_home", "home") == "arrived_home"
+    assert presence_hint("Work", "home") == "arrived_home"
+    assert presence_hint("not_home", "Work") is None
+    # A restart or a phone dropping off the network is not a drive.
+    assert presence_hint("unavailable", "home") is None
+    assert presence_hint("home", "unknown") is None
+    assert presence_hint("home", "home") is None

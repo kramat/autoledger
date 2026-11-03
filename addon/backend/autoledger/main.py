@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__, discovery
-from .api import data, export, inbox, reports, resources, schedules, summary, system, trips
+from .api import attachments, data, export, inbox, reports, resources, schedules, summary, system, trips
 from .auth import auth_middleware
 from .config import Config, load_config
 from .db import make_engine
@@ -54,6 +54,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app.add_exception_handler(RequestValidationError, _validation_error)
 
     for router in (system.router, summary.router, reports.router, export.router, data.router, inbox.router,
+                   attachments.router,
                    *trips.ROUTERS, *schedules.ROUTERS,
                    *resources.ROUTERS):
         app.include_router(router, prefix=API_PREFIX)
