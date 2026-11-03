@@ -52,9 +52,9 @@ Each milestone ends with something usable. The manual workflow comes first, so t
   - plus an end-to-end run in a real Home Assistant 2026.10.4 core against the dev add-on: config flow, both subentries, a night charge with a flapping power sensor, a refuel, discovery, a service call and diagnostics.
 
   HA's pytest plugin does not run on Windows, so config-flow unit tests for CI follow later.
-- **Not verified yet:**
-  - whether the Supervisor routes the `autoledger` discovery to a custom integration (if not, the manual setup with the suggested URL works);
-  - behaviour on the real Lynk and Shelly data over a few days.
+- **Collector 0.2.1:** vehicle values (type, tank, battery, wall kWh per %) follow the add-on on every summary poll instead of being copied once when the vehicle is added.
+- **Verified on the real installation (HA 2026.10.4, Supervisor 2026.10.5):** the Supervisor routes the `autoledger` discovery to the custom integration; the entry was set up without pasting the token.
+- **Not verified yet:** behaviour on the real Lynk and Shelly data over a few days.
 
 ## Quality bar (all milestones)
 

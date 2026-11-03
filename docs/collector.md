@@ -34,6 +34,8 @@ Every setting can be changed later through the subentry's **Reconfigure** option
 | `car_timestamp` | no | sensor containing the car's own report time | Exact event times for cloud-based cars |
 | `fuel_flap`, `running`, `fuel_price` | *(M3/M5)* | | Refuel confirmation, live trip mode, refuel price suggestion. Until then the add-on suggests the price of your last refuel, or the default from Settings. |
 
+The vehicle's type, tank size, usable battery and wall kWh per % come from the add-on. The Collector takes them over again on every summary poll (5 min), so a change on the add-on's Vehicles page needs no reconfigure or reload. The latest values are kept in the Collector's store and used after a restart, even when the add-on is not reachable yet.
+
 ### Charger subentry
 
 | Role | Required | Expected entity | Used for |
@@ -42,7 +44,7 @@ Every setting can be changed later through the subentry's **Reconfigure** option
 | `power` | no | sensor, W or kW | Session start and stop detection, live power on the GUI |
 | `switch` | no | switch | Session end hint, shown in the GUI |
 | `price` | no | sensor, €/kWh (dynamic or fixed tariff) | Pricing each kWh at the moment it is delivered |
-| `vehicle` | no | one of the vehicle subentries | Which car gets the session. Without one, sessions land in the review inbox. *Auto (by plug state)* follows later. |
+| `vehicle` | no | one of the vehicle subentries | Which car gets the session, and whose battery rise it explains. Without one, sessions land in the review inbox, and that car's battery rise from a home charge is reported as a public charge. *Auto (by plug state)* follows later. Add the vehicle before the charger, or pick it afterwards with *Change charger*. |
 
 ## Snapshots
 

@@ -39,6 +39,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: AutoLedgerConfigEntry) -
     await runtime.async_start()
     runtime.coordinator = SummaryCoordinator(hass, entry, client)
     await runtime.coordinator.async_refresh()
+    runtime.apply_summary()
+    entry.async_on_unload(runtime.coordinator.async_add_listener(runtime.apply_summary))
     entry.runtime_data = runtime
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -56,6 +57,7 @@ from .const import (
     SUBENTRY_CHARGER,
     SUBENTRY_VEHICLE,
     TICK_INTERVAL,
+    VEHICLE_INFO_KEYS,
     VEHICLE_ROLES,
     VERSION,
 )
@@ -179,6 +181,14 @@ class Runtime:
             self.hass.async_create_task(self.coordinator.async_request_refresh())
 
     @callback
+    def apply_summary(self) -> None:
+        """Keep detection in step with vehicle changes made in the add-on (every summary poll)."""
+        items = {item["vehicle"]["id"]: item["vehicle"] for item in (self.coordinator.data or {}).get("vehicles", [])}
+        for tracker in self.vehicles.values():
+            if (vehicle := items.get(tracker.params.vehicle_id)) is not None:
+                tracker.apply_vehicle(vehicle)
+
+    @callback
     def _tick(self, now: datetime) -> None:
         for charger in self.chargers.values():
             charger.tick(dt_util.utcnow())
@@ -193,7 +203,12 @@ class VehicleTracker:
         self.subentry_id = subentry.subentry_id
         self.name = subentry.title
         data = subentry.data
-        vehicle = data.get(CONF_VEHICLE, {})
+        self.state: dict = runtime.data["vehicles"].setdefault(
+            self.subentry_id, {"last": None, "history": [], "pending_soc": []}
+        )
+        # The add-on's latest vehicle values (stored by apply_vehicle) win over the copy
+        # made when the subentry was created, so a restart without the add-on keeps them.
+        vehicle = self.state.get("vehicle") or data.get(CONF_VEHICLE, {})
         thresholds = data.get(CONF_THRESHOLDS, {})
         self.params = VehicleParams(
             vehicle_id=data[CONF_VEHICLE_ID],
@@ -206,15 +221,34 @@ class VehicleTracker:
         )
         self.fuel_unit = data.get(CONF_FUEL_UNIT, "L")
         self.roles: dict[str, str] = {role: data[role] for role in VEHICLE_ROLES if data.get(role)}
-        self.state: dict = runtime.data["vehicles"].setdefault(
-            self.subentry_id, {"last": None, "history": [], "pending_soc": []}
-        )
         self._unsub: Callable[[], None] | None = None
         self._pending: Callable[[], None] | None = None
 
     @property
     def last(self) -> Snapshot | None:
         return Snapshot.from_dict(self.state["last"]) if self.state.get("last") else None
+
+    @callback
+    def apply_vehicle(self, vehicle: dict) -> bool:
+        """Take type, tank and battery values from the add-on's current vehicle record."""
+        info = {key: vehicle.get(key) for key in VEHICLE_INFO_KEYS}
+        params = replace(
+            self.params,
+            type=info["type"] or self.params.type,
+            tank_l=info["tank_l"],
+            battery_usable_kwh=info["battery_usable_kwh"],
+            kwh_per_pct=info["kwh_per_pct"],
+        )
+        if params == self.params:
+            return False
+        self.params = params
+        self.state["vehicle"] = info
+        self.runtime.save_soon()
+        self.runtime.log(
+            f"{self.name}: vehicle values from the add-on: tank {params.tank_l} L, "
+            f"battery {params.battery_usable_kwh} kWh, wall {params.kwh_per_pct} kWh/%"
+        )
+        return True
 
     def charger_entities(self) -> list[str]:
         return [c.energy_entity for c in self.runtime.chargers.values() if c.vehicle_subentry_id == self.subentry_id]

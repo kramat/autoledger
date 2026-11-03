@@ -71,6 +71,7 @@ from .const import (
     ROLE_TRIP_METER,
     SUBENTRY_CHARGER,
     SUBENTRY_VEHICLE,
+    VEHICLE_INFO_KEYS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -318,7 +319,7 @@ class VehicleSubentryFlow(_AutoLedgerSubentryFlow):
 
 
 def _vehicle_info(vehicle: dict) -> dict:
-    return {key: vehicle.get(key) for key in ("type", "tank_l", "battery_usable_kwh", "kwh_per_pct", "name")}
+    return {key: vehicle.get(key) for key in VEHICLE_INFO_KEYS}
 
 
 def _vehicle_schema(vehicle_type: str, with_odometer: bool = False) -> vol.Schema:

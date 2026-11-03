@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 DOMAIN = "autoledger"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 API_VERSION = 1
 
 CONF_URL = "url"
@@ -14,7 +14,8 @@ SUBENTRY_CHARGER = "charger"
 
 # Vehicle subentry data
 CONF_VEHICLE_ID = "vehicle_id"
-CONF_VEHICLE = "vehicle"  # add-on vehicle info cached at setup: type, tank_l, battery, kwh_per_pct
+CONF_VEHICLE = "vehicle"  # add-on vehicle values copied at setup; refreshed from every summary poll
+VEHICLE_INFO_KEYS = ("type", "tank_l", "battery_usable_kwh", "kwh_per_pct", "name")
 CONF_FUEL_UNIT = "fuel_unit"
 CONF_THRESHOLDS = "thresholds"
 CONF_EXTERNAL_CHARGE_MIN_PCT = "external_charge_min_pct"
