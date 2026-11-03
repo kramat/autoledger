@@ -585,3 +585,167 @@ td.row-actions {
 }
 .attachment-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .checkbox-hint { display: block; margin-top: 2px; }
+
+/* --- Narrow and foldable screens ------------------------------------------ */
+
+/* A table a little wider than the screen (an unfolded foldable, a tablet) keeps its actions in view. */
+.data-table td.row-actions,
+.data-table thead th:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+  box-shadow: -1px 0 0 var(--border);
+}
+
+.data-table thead th:last-child {
+  background: var(--surface-2);
+}
+
+.data-table tbody tr:hover td.row-actions {
+  background: var(--surface-2);
+}
+
+/* Side-by-side figures scroll, but the row names stay. */
+.matrix th:first-child,
+.matrix td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--border);
+}
+
+.matrix thead th:first-child {
+  background: var(--surface-2);
+}
+
+@media (max-width: 560px) {
+  /* A folded phone: every row of a record table becomes a card with labelled values. */
+  .data-table,
+  .data-table tbody,
+  .data-table tfoot,
+  .data-table tr,
+  .data-table td {
+    display: block;
+  }
+
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .data-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px 14px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .data-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .data-table tbody td,
+  .data-table tbody tr:last-child td {
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .data-table tbody td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-2);
+  }
+
+  .data-table tbody td:first-child,
+  .data-table td.wrap {
+    grid-column: 1 / -1;
+  }
+
+  .data-table tbody td:first-child {
+    font-weight: 600;
+  }
+
+  .data-table tbody td:first-child::before,
+  .data-table td.row-actions::before {
+    content: none;
+  }
+
+  .data-table td.blank {
+    display: none;
+  }
+
+  .data-table td.row-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 20px;
+    width: auto;
+    position: static;
+    background: none;
+    box-shadow: none;
+  }
+
+  .data-table td.row-actions .link {
+    padding: 6px 0;
+  }
+
+  .data-table tfoot tr {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 12px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .data-table tfoot td {
+    padding: 0;
+    border: 0;
+  }
+
+  .data-table tfoot td:empty {
+    display: none;
+  }
+
+  /* A compact header: name and filters on one line, so more of the cover screen is content. */
+  .topbar-row {
+    padding: 8px 12px 4px;
+    gap: 6px 10px;
+    flex-wrap: nowrap;
+  }
+
+  .brand {
+    font-size: 1.05rem;
+    white-space: nowrap;
+  }
+
+  .filters {
+    min-width: 0;
+    justify-content: flex-end;
+  }
+
+  .filters select {
+    min-height: 32px;
+    padding: 4px 6px;
+    font-size: 0.9rem;
+    max-width: calc((100vw - 160px) / 2);
+    text-overflow: ellipsis;
+  }
+
+  .tab {
+    padding: 6px 10px 8px;
+  }
+
+  .page {
+    padding: 14px 12px 72px;
+  }
+}

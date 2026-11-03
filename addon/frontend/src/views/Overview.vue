@@ -287,7 +287,7 @@ const kmOption = computed(() => {
           <ChartBox :option="kmOption" :height="200" label="Bar chart of km driven per month" />
         </template>
         <div v-else class="table-wrap">
-          <table>
+          <table class="matrix">
             <thead>
               <tr>
                 <th scope="col">Month</th><th class="num" scope="col">km</th><th class="num" scope="col">Fuel</th>

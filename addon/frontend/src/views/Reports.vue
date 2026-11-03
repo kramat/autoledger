@@ -270,7 +270,7 @@ const exportParams = computed(() => params.value)
           365 days, so vehicles with a shorter history compare fairly.
         </p>
         <div class="table-wrap">
-          <table>
+          <table class="matrix">
             <thead>
               <tr>
                 <th scope="col"><span class="sr-only">Figure</span></th>
@@ -306,7 +306,7 @@ const exportParams = computed(() => params.value)
         <ChartBox v-if="groupView === 'chart'" :option="costOption" :height="280"
           :label="`Stacked bar chart of cost per ${report.group} by category`" />
         <div v-else class="table-wrap">
-          <table>
+          <table class="matrix">
             <thead>
               <tr>
                 <th scope="col">Period</th><th class="num" scope="col">km</th><th class="num" scope="col">Fuel</th>
@@ -352,7 +352,7 @@ const exportParams = computed(() => params.value)
         <h3 style="margin: 20px 0 4px">Winter and summer</h3>
         <p class="small muted" style="margin: 0 0 8px">Consumption per season, over every month with data.</p>
         <div class="table-wrap">
-          <table>
+          <table class="matrix">
             <thead>
               <tr>
                 <th scope="col">Season</th>

@@ -15,11 +15,13 @@ defineProps<{
   extra?: { label: (row: T) => string; run: (row: T) => void }
 }>()
 const emit = defineEmits<{ edit: [row: T]; delete: [row: T] }>()
+// Empty and "—" cells are left out of the card layout on narrow screens.
+const isBlank = (value: string) => !value || value === '—'
 </script>
 
 <template>
   <div class="table-wrap">
-    <table v-if="rows.length">
+    <table v-if="rows.length" class="data-table">
       <thead>
         <tr>
           <th v-for="c in columns" :key="c.key" :class="{ num: c.num }" scope="col">{{ c.label }}</th>
@@ -28,7 +30,9 @@ const emit = defineEmits<{ edit: [row: T]; delete: [row: T] }>()
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="row.id">
-          <td v-for="c in columns" :key="c.key" :class="{ num: c.num, wrap: c.wrap }">{{ c.value(row) }}</td>
+          <!-- data-label: on narrow screens (a folded phone) each row is a card with labelled values -->
+          <td v-for="c in columns" :key="c.key" :class="{ num: c.num, wrap: c.wrap, blank: isBlank(c.value(row)) }"
+            :data-label="c.label">{{ c.value(row) }}</td>
           <td class="row-actions">
             <button class="link" @click="emit('edit', row)">Edit</button>
             <button v-if="extra" class="link" @click="extra.run(row)">{{ extra.label(row) }}</button>

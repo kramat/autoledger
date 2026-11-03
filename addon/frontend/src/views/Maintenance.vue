@@ -155,7 +155,7 @@ const inactive = computed(() => schedules.items.value.filter((s) => !s.active))
       <template v-for="v in due" :key="v.vehicle_id">
         <h3 v-if="!state.vehicleId && due.length > 1" class="small muted" style="margin: 12px 0 4px">{{ v.vehicle_name }}</h3>
         <div v-if="v.items.length" class="table-wrap">
-          <table>
+          <table class="data-table">
             <thead>
               <tr>
                 <th scope="col">Schedule</th><th scope="col">Status</th><th scope="col">Next due</th>
@@ -165,9 +165,9 @@ const inactive = computed(() => schedules.items.value.filter((s) => !s.active))
             <tbody>
               <tr v-for="item in v.items" :key="item.schedule_id">
                 <td class="wrap"><b>{{ item.name }}</b><br /><span class="small muted">{{ every(item) }}</span></td>
-                <td><span class="badge" :class="item.status">{{ DUE_STATUSES[item.status] }}</span></td>
-                <td class="wrap">{{ when(item) }}</td>
-                <td class="wrap">
+                <td data-label="Status"><span class="badge" :class="item.status">{{ DUE_STATUSES[item.status] }}</span></td>
+                <td class="wrap" data-label="Next due">{{ when(item) }}</td>
+                <td class="wrap" data-label="Last done">
                   {{ item.last_done_date ? fmtDate(item.last_done_date) : '—' }}<template v-if="item.last_done_km != null">
                     · {{ km(item.last_done_km) }}</template>
                 </td>

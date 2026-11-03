@@ -1,5 +1,5 @@
 name: AutoLedger
-version: "0.5.0"
+version: "0.5.1"
 slug: autoledger
 description: Trip, charging, fuel, maintenance and cost bookkeeping for your cars
 url: https://github.com/kramat/autoledger

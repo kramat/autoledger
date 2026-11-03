@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+- Foldables and phones: on narrow screens (a folded Galaxy Z Fold, most phones) every record table shows its rows as
+  cards with labelled values, so Edit and Delete are always in reach without scrolling sideways. Unfolded, tables stay
+  tables and the Edit/Delete column stays at the right edge when a table is wider than the screen.
+- The report and overview tables keep their first column in view while the figures scroll.
+- A more compact header on narrow screens: name and filters on one line.
+
 ## 0.5.0
 
 - Receipt photos and invoices: attach a photo or PDF to a refuel, a maintenance entry or a cost, from your phone's
