@@ -6,7 +6,7 @@ Each milestone ends with something usable. The manual workflow comes first, so t
 |---|---|---|
 | **M1: Add-on core** ✅ built | Add-on skeleton (Ingress, `/data`, migrations), vehicles, refuels, odometer readings, maintenance log, expenses, overview + fuel + maintenance pages, cost engine for refuels, CSV export | The VW Up's refuels and maintenance can be logged and give L/100 km, €/km and monthly costs |
 | **M2: Collector, charging & fuel** ✅ built | Collector config flow (discovery + manual), vehicle and charger subentries, snapshot builder, home charge detector with per-increment pricing, refuel and external charge detection, outbox, ingest API, review inbox, summary sensors | A night charge on the Shelly shows up with correct kWh and € even when the power sensor flaps. A refuel of the Lynk ends up in the review inbox. |
-| **M3: Trips** | Trip detector (snapshot mode), idle records, kWh-per-% learning, battery/tank cost basis, trips page with map, merge/split, backfill service | Every Lynk drive appears with km, kWh, L and €. The 2 Nov example reproduces the numbers in [costs.md](costs.md#worked-example-lynk--co-2-nov-2026). |
+| **M3: Trips** ✅ built | Trip detector (snapshot mode), idle records, kWh-per-% learning, battery/tank cost basis, trips page with map, merge/split, backfill service | Every Lynk drive appears with km, kWh, L and €. The 2 Nov example reproduces the numbers in [costs.md](costs.md#worked-example-lynk--co-2-nov-2026). |
 | **M4: Insight** | Reports (period, compare, trends), maintenance schedules and reminders, fuel reconciliation, XLSX export, JSON backup/restore, CSV import | Year report for both cars, and maintenance reminders as HA sensors |
 | **M5: Extras** | Snapshot boost, live trip mode, receipt photo attachments, recurring expenses + depreciation, fuel price entity support | — |
 
@@ -27,6 +27,23 @@ Each milestone ends with something usable. The manual workflow comes first, so t
   - the image has not been built by a real Supervisor yet; that happens on first install;
   - no CSV import yet (M4), so old data is entered by hand with back-dated dates;
   - maintenance schedules and reminders follow in M4.
+
+## M3 as built (3 Nov 2026)
+
+- **Add-on 0.3.0:**
+  - migration 0003 (trips, idle records);
+  - ingest of `trip.recorded` and `idle.recorded`;
+  - cost engine: battery and tank pools with a weighted average price from the first trip on, engine-charged kWh at €0, fuel reconciliation between full tanks (only when trips cover ≥ 80 % of the km), kWh per % learned from home sessions with a plausibility filter;
+  - trip-based totals: trip km, kWh/100 km, L/100 km, electric share, climate & standby kept out of €/km;
+  - `/trips` with costing, split and merge (undoable), `/idle-records`, trips in the summary and CSV export;
+  - GUI: Trips page (list, OpenStreetMap map, details with the cost calculation, split, merge, add by hand), climate & standby list, efficiency card on Charging, last trip and consumption on the overview.
+- **Collector 0.3.0:**
+  - trip detection per segment, with the trip meter only when it agrees with the odometer, round trips by zone or 150 m, and the energy charged within the window;
+  - idle detection when parked and not charging;
+  - `autoledger.backfill` from recorder history up to where live tracking began, with uuids derived from the content;
+  - thresholds `min_trip_km`, `idle_min_pct`, `idle_min_l`; sensors `last_trip` and `electric_consumption`; event `autoledger_trip_recorded`.
+- **Tests:** 59 add-on tests (the 2 Nov worked example gives €1.16 / €0.18 per km) and 30 Collector engine tests, plus the end-to-end run in a real HA core, now with backfill from the recorder and live trips.
+- **Not built from the M3 design:** refining an estimated start time with an average speed (M5), a price curve per home session, backfilling home charge sessions, and a cache of the replay states (not needed yet).
 
 ## M2 as built (2 Nov 2026)
 

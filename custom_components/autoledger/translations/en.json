@@ -82,8 +82,11 @@
             "thresholds": {
               "name": "Detection thresholds",
               "data": {
+                "min_trip_km": "Trip when the car moved at least",
                 "refuel_min_l": "Refuel when the tank rises at least",
-                "external_charge_min_pct": "Public charge when the battery rises at least"
+                "external_charge_min_pct": "Public charge when the battery rises at least",
+                "idle_min_pct": "Climate & standby when the parked battery drops at least",
+                "idle_min_l": "Climate & standby when the parked tank drops at least"
               }
             }
           }
@@ -108,8 +111,11 @@
             "thresholds": {
               "name": "Detection thresholds",
               "data": {
+                "min_trip_km": "Trip when the car moved at least",
                 "refuel_min_l": "Refuel when the tank rises at least",
-                "external_charge_min_pct": "Public charge when the battery rises at least"
+                "external_charge_min_pct": "Public charge when the battery rises at least",
+                "idle_min_pct": "Climate & standby when the parked battery drops at least",
+                "idle_min_l": "Climate & standby when the parked tank drops at least"
               }
             }
           }
@@ -195,22 +201,56 @@
   },
   "entity": {
     "sensor": {
-      "cost_this_month": { "name": "Cost this month" },
-      "energy_cost_this_month": { "name": "Energy cost this month" },
-      "distance_this_month": { "name": "Distance this month" },
-      "electricity_this_month": { "name": "Electricity this month" },
-      "fuel_this_month": { "name": "Fuel this month" },
-      "cost_per_km": { "name": "Energy cost per km" },
-      "total_cost_per_km": { "name": "Total cost per km" },
-      "fuel_consumption": { "name": "Fuel consumption" },
-      "last_charge": { "name": "Last charge" },
-      "odometer": { "name": "Odometer" },
-      "review_items": { "name": "Items to review" },
-      "session_energy": { "name": "Session energy" },
-      "session_cost": { "name": "Session cost" }
+      "cost_this_month": {
+        "name": "Cost this month"
+      },
+      "energy_cost_this_month": {
+        "name": "Energy cost this month"
+      },
+      "distance_this_month": {
+        "name": "Distance this month"
+      },
+      "electricity_this_month": {
+        "name": "Electricity this month"
+      },
+      "fuel_this_month": {
+        "name": "Fuel this month"
+      },
+      "cost_per_km": {
+        "name": "Energy cost per km"
+      },
+      "total_cost_per_km": {
+        "name": "Total cost per km"
+      },
+      "fuel_consumption": {
+        "name": "Fuel consumption"
+      },
+      "electric_consumption": {
+        "name": "Electric consumption"
+      },
+      "last_trip": {
+        "name": "Last trip"
+      },
+      "last_charge": {
+        "name": "Last charge"
+      },
+      "odometer": {
+        "name": "Odometer"
+      },
+      "review_items": {
+        "name": "Items to review"
+      },
+      "session_energy": {
+        "name": "Session energy"
+      },
+      "session_cost": {
+        "name": "Session cost"
+      }
     },
     "binary_sensor": {
-      "session_active": { "name": "Charging" }
+      "session_active": {
+        "name": "Charging"
+      }
     }
   },
   "issues": {
@@ -220,48 +260,120 @@
     }
   },
   "exceptions": {
-    "not_loaded": { "message": "The AutoLedger Collector is not set up." },
-    "not_a_vehicle": { "message": "Pick an AutoLedger vehicle." }
+    "not_loaded": {
+      "message": "The AutoLedger Collector is not set up."
+    },
+    "not_a_vehicle": {
+      "message": "Pick an AutoLedger vehicle."
+    },
+    "not_collected": {
+      "message": "This vehicle has no Collector vehicle entry. Add it under the AutoLedger integration first."
+    }
   },
   "services": {
     "add_refuel": {
       "name": "Add refuel",
       "description": "Adds a refuel to AutoLedger. Give two of litres, total and price per litre.",
       "fields": {
-        "vehicle": { "name": "Vehicle", "description": "The AutoLedger vehicle." },
-        "litres": { "name": "Litres", "description": "Litres from the receipt." },
-        "total": { "name": "Total", "description": "Amount paid." },
-        "price_per_l": { "name": "Price per litre", "description": "Price per litre." },
-        "odometer": { "name": "Odometer", "description": "Odometer at the time of the refuel, for L/100 km." },
-        "full_tank": { "name": "Full tank", "description": "The tank was filled completely." },
-        "station": { "name": "Station", "description": "Name or place of the station." },
-        "timestamp": { "name": "Time", "description": "When it happened. Default: now." }
+        "vehicle": {
+          "name": "Vehicle",
+          "description": "The AutoLedger vehicle."
+        },
+        "litres": {
+          "name": "Litres",
+          "description": "Litres from the receipt."
+        },
+        "total": {
+          "name": "Total",
+          "description": "Amount paid."
+        },
+        "price_per_l": {
+          "name": "Price per litre",
+          "description": "Price per litre."
+        },
+        "odometer": {
+          "name": "Odometer",
+          "description": "Odometer at the time of the refuel, for L/100 km."
+        },
+        "full_tank": {
+          "name": "Full tank",
+          "description": "The tank was filled completely."
+        },
+        "station": {
+          "name": "Station",
+          "description": "Name or place of the station."
+        },
+        "timestamp": {
+          "name": "Time",
+          "description": "When it happened. Default: now."
+        }
       }
     },
     "add_charge": {
       "name": "Add charge",
       "description": "Adds a charge away from home to AutoLedger.",
       "fields": {
-        "vehicle": { "name": "Vehicle", "description": "The AutoLedger vehicle." },
-        "energy_kwh": { "name": "Energy", "description": "kWh charged." },
-        "total": { "name": "Total", "description": "Amount paid. Leave empty to use the price per kWh." },
-        "price_per_kwh": { "name": "Price per kWh", "description": "Price per kWh." },
-        "location": { "name": "Location", "description": "Where you charged." },
-        "timestamp": { "name": "Time", "description": "When the charge started. Default: now." }
+        "vehicle": {
+          "name": "Vehicle",
+          "description": "The AutoLedger vehicle."
+        },
+        "energy_kwh": {
+          "name": "Energy",
+          "description": "kWh charged."
+        },
+        "total": {
+          "name": "Total",
+          "description": "Amount paid. Leave empty to use the price per kWh."
+        },
+        "price_per_kwh": {
+          "name": "Price per kWh",
+          "description": "Price per kWh."
+        },
+        "location": {
+          "name": "Location",
+          "description": "Where you charged."
+        },
+        "timestamp": {
+          "name": "Time",
+          "description": "When the charge started. Default: now."
+        }
       }
     },
     "add_odometer": {
       "name": "Add odometer reading",
       "description": "Adds an odometer reading to AutoLedger.",
       "fields": {
-        "vehicle": { "name": "Vehicle", "description": "The AutoLedger vehicle." },
-        "odometer": { "name": "Odometer", "description": "Odometer value in km." },
-        "timestamp": { "name": "Time", "description": "When it was read. Default: now." }
+        "vehicle": {
+          "name": "Vehicle",
+          "description": "The AutoLedger vehicle."
+        },
+        "odometer": {
+          "name": "Odometer",
+          "description": "Odometer value in km."
+        },
+        "timestamp": {
+          "name": "Time",
+          "description": "When it was read. Default: now."
+        }
       }
     },
     "resync": {
       "name": "Resync",
       "description": "Sends waiting records to the add-on now and refreshes the sensors."
+    },
+    "backfill": {
+      "name": "Backfill",
+      "description": "Reads the recorded history of the vehicle's entities from the start date up to when live tracking began, and adds the trips, refuels, public charges and odometer readings found. Running it twice adds nothing twice. Home charge sessions are not backfilled.",
+      "fields": {
+        "vehicle": {
+          "name": "Vehicle",
+          "description": "The AutoLedger vehicle."
+        },
+        "start": {
+          "name": "Start date",
+          "description": "Home Assistant keeps about 10 days of history by default."
+        }
+      }
     }
   }
 }

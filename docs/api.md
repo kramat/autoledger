@@ -46,12 +46,12 @@ Event envelope:
 
 | `type` | Payload (main fields) |
 |---|---|
-| `trip.recorded` *(M3)* | `start_ts`, `start_ts_estimated`, `end_ts`, `start: {lat, lon, address, zone}`, `end: {…}`, `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`), `battery_start_pct`, `battery_end_pct`, `energy_kwh`, `fuel_start_l`, `fuel_end_l`, `fuel_l`, `kind` |
+| `trip.recorded` | `start_ts`, `start_ts_estimated`, `end_ts`, `start: {lat, lon, address, zone}`, `end: {…}`, `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`), `battery_start_pct`, `battery_end_pct`, `charged_kwh`, `fuel_start_l`, `fuel_end_l`, `kind`, `flags` |
 | `charge.started` / `charge.updated` / `charge.completed` | `session_id`, `charger_id`, `start_ts`, `end_ts`?, `energy_kwh`, `cost`, `price_samples: [{ts, kwh, price}]` (only in `completed`), `soc_start`?, `soc_end`? |
 | `charge.soc_update` | `session_id`, `soc_start`?, `soc_end`?. Sent later, once the cloud car has reported its battery level. |
 | `external_charge.detected` | `window_start`, `window_end`, `place`, `battery_start_pct`, `battery_end_pct`, `energy_kwh_estimated`, `car_reported_charging`, `flags: [...]` |
 | `refuel.detected` | `ts`, `place`, `odometer`, `fuel_start_l`, `fuel_end_l`, `litres_estimated`, `suggested_price_per_l`, `price_source` |
-| `idle.recorded` *(M3)* | `start_ts`, `end_ts`, `battery_delta_pct`, `energy_kwh`, `fuel_l` |
+| `idle.recorded` | `start_ts`, `end_ts`, `zone`, `battery_start_pct`?, `battery_end_pct`?, `fuel_start_l`?, `fuel_end_l`? |
 | `odometer.reading` | `ts`, `odometer_km` |
 
 Ingest rules:
@@ -67,7 +67,8 @@ Each resource supports `GET` (list), `GET /{id}`, `POST`, `PATCH /{id}` and `DEL
 | Path | Milestone | Notes |
 |---|---|---|
 | `/vehicles` | M1 | All vehicles, archived ones included (`archived_at`). `PATCH {"archived": true}` archives. |
-| `/trips` | M3 | `POST /trips/{id}/split {at_km, at_ts}`, `POST /trips/merge {ids:[a,b]}` |
+| `/trips` | M3 | Items carry a `costing` block (see [costs.md](costs.md#recalculation)). `POST /trips/{id}/split {at_km, at_ts, address?}` returns both parts; `POST /trips/merge {ids:[a,b]}` merges two adjacent trips of one vehicle. The originals are soft-deleted, so `/restore` undoes either. |
+| `/idle-records` | M3 | Climate & standby, with `costing` |
 | `/charges` | M2 | Home, public and manual sessions. `price_mode` is `samples` (priced by the collector), `per_kwh`, `total` or `free`; `cost` is derived from it. |
 | `/refuels` | M1 | List items include `interval_km` and `l_per_100km` on refuels that close a full-to-full interval |
 | `/odometer-readings` | M1 | |

@@ -29,6 +29,8 @@ RESOURCES = {
         models.MaintenanceRecord, schemas.MaintenanceIn, schemas.MaintenanceOut, "date", models.MaintenanceRecord.date,
     ),
     "expenses": (models.Expense, schemas.ExpenseIn, schemas.ExpenseOut, "date", models.Expense.date),
+    "trips": (models.Trip, schemas.TripIn, schemas.TripOut, "start_ts", models.Trip.start_ts),
+    "idle-records": (models.IdleRecord, schemas.IdleIn, schemas.IdleOut, "start_ts", models.IdleRecord.start_ts),
 }
 # Record fields after the user-facing ones, when the resource has them.
 TRAILING_COLUMNS = ("cost", "auto_cost", "charger_name", "archived_at", "source", "status", "id", "created_at", "updated_at")

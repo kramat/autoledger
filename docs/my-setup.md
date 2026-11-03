@@ -31,7 +31,7 @@ Vehicle parameters:
 
 - Battery: **14.1 kWh usable** (17.6 kWh gross).
 - Wall energy for a full charge: an empty-to-full charge on the Shelly typically takes **≈ 16.5 kWh**. The starting `kwh_per_pct` is therefore **0.165** wall-kWh per %, which means about 85 % charging efficiency. Learning from home sessions refines it after that.
-- Tank: about 51 L (to confirm).
+- Tank: 42 L (European version).
 - Public charging happens 1–2 times per month. Those sessions go through the review inbox with the default public price.
 
 ### How this car's data actually behaves

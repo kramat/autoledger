@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 DOMAIN = "autoledger"
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 API_VERSION = 1
 
 CONF_URL = "url"
@@ -20,6 +20,9 @@ CONF_FUEL_UNIT = "fuel_unit"
 CONF_THRESHOLDS = "thresholds"
 CONF_EXTERNAL_CHARGE_MIN_PCT = "external_charge_min_pct"
 CONF_REFUEL_MIN_L = "refuel_min_l"
+CONF_MIN_TRIP_KM = "min_trip_km"
+CONF_IDLE_MIN_PCT = "idle_min_pct"
+CONF_IDLE_MIN_L = "idle_min_l"
 
 ROLE_ODOMETER = "odometer"
 ROLE_TRIP_METER = "trip_meter"
@@ -61,5 +64,6 @@ REPAIR_AFTER = timedelta(hours=24)
 EVENT_CHARGE_COMPLETED = f"{DOMAIN}_charge_completed"
 EVENT_REFUEL_DETECTED = f"{DOMAIN}_refuel_detected"
 EVENT_REVIEW_NEEDED = f"{DOMAIN}_review_needed"
+EVENT_TRIP_RECORDED = f"{DOMAIN}_trip_recorded"
 
 SIGNAL_CHARGER_UPDATE = f"{DOMAIN}_charger_update_{{}}"

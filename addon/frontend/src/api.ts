@@ -80,6 +80,70 @@ export interface Charge extends RecordBase {
   avg_price: number | null
 }
 
+export interface TripCosting {
+  energy_kwh: number
+  kwh_per_pct: number | null
+  factor_mode: 'manual' | 'learned' | 'default' | null
+  kwh_price: number | null
+  electricity_cost: number
+  fuel_l_provisional: number
+  fuel_l: number
+  fuel_reconciled: boolean
+  l_price: number | null
+  fuel_cost: number
+  cost: number
+  notes: string[]
+}
+
+export interface Trip extends RecordBase {
+  vehicle_id: string
+  start_ts: string
+  start_ts_estimated: boolean
+  end_ts: string
+  start_lat: number | null
+  start_lon: number | null
+  start_address: string | null
+  start_zone: string | null
+  end_lat: number | null
+  end_lon: number | null
+  end_address: string | null
+  end_zone: string | null
+  kind: 'one_way' | 'round_trip'
+  odometer_start: number | null
+  odometer_end: number | null
+  distance_km: number
+  distance_source: 'trip_meter' | 'odometer' | 'manual'
+  battery_start_pct: number | null
+  battery_end_pct: number | null
+  battery_used_pct: number | null
+  charged_kwh: number
+  energy_kwh: number | null
+  fuel_start_l: number | null
+  fuel_end_l: number | null
+  fuel_l: number
+  origin: { merged_from?: string[]; split_from?: string }
+  note: string | null
+  source: string
+  status: string
+  locked_fields: string[]
+  costing: TripCosting | null
+}
+
+export interface IdleRecord extends RecordBase {
+  vehicle_id: string
+  start_ts: string
+  end_ts: string
+  zone: string | null
+  battery_start_pct: number | null
+  battery_end_pct: number | null
+  battery_used_pct: number | null
+  energy_kwh: number | null
+  fuel_l: number
+  note: string | null
+  source: string
+  costing: TripCosting | null
+}
+
 export interface ReviewItem extends RecordBase {
   vehicle_id: string | null
   record_type: 'refuel' | 'charge' | null
@@ -142,6 +206,25 @@ export interface Totals {
   charge_count: number
   maintenance_count: number
   distance_known_until: string | null
+  trip_count: number
+  trip_km: number
+  trip_kwh: number
+  trip_fuel_l: number
+  trip_cost: number
+  kwh_per_100km: number | null
+  electric_share: number | null
+  idle_kwh: number
+  idle_fuel_l: number
+  idle_cost: number
+}
+
+export interface Efficiency {
+  kwh_per_pct: number
+  mode: 'manual' | 'learned' | 'default'
+  sessions: string[]
+  learnable_sessions: number
+  learned: number | null
+  default: number | null
 }
 
 export interface MonthTotals extends Totals {
@@ -158,6 +241,9 @@ export interface VehicleSummary {
   last_refuel: Refuel | null
   open_charge: Charge | null
   last_charge: Charge | null
+  last_trip: Trip | null
+  efficiency: Efficiency | null
+  trips_since: string | null
   monthly: MonthTotals[]
 }
 
@@ -184,7 +270,15 @@ export interface Page<T> {
   total: number
 }
 
-export type Resource = 'vehicles' | 'refuels' | 'odometer-readings' | 'charges' | 'maintenance' | 'expenses'
+export type Resource =
+  | 'vehicles'
+  | 'refuels'
+  | 'odometer-readings'
+  | 'charges'
+  | 'maintenance'
+  | 'expenses'
+  | 'trips'
+  | 'idle-records'
 
 export class ApiError extends Error {
   constructor(
@@ -227,6 +321,9 @@ export const api = {
   update: <T>(resource: Resource, id: string, body: object) => request<T>('PATCH', `/${resource}/${id}`, body),
   remove: (resource: Resource, id: string) => request<void>('DELETE', `/${resource}/${id}`),
   restore: <T>(resource: Resource, id: string) => request<T>('POST', `/${resource}/${id}/restore`),
+  splitTrip: (id: string, body: { at_km: number; at_ts: string; address?: string | null }) =>
+    request<Trip[]>('POST', `/trips/${id}/split`, body),
+  mergeTrips: (ids: [string, string]) => request<Trip>('POST', '/trips/merge', { ids }),
   reviewItems: () => request<Page<ReviewItem>>('GET', '/review-items'),
   resolve: (id: string, action: 'update' | 'accept' | 'delete' | 'dismiss', values: object = {}) =>
     request<ReviewItem>('POST', `/review-items/${id}/resolve`, { action, values }),

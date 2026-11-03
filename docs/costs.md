@@ -45,9 +45,11 @@ Two of `litres`, `price_per_l` and `total` are given, and the third is calculate
 
 For a detected refuel, the suggested `price_per_l` comes from the fuel price entity or the previous refuel. It stays marked *estimated* until you confirm it.
 
-## Until trips exist (M2)
+## Before the first trip
 
-Without trips there is nothing to spread energy over yet. Electricity is therefore counted like fuel for a manual vehicle: on a **purchase basis**, in the period the charge started. A running session counts with its energy and cost so far. The battery and tank cost basis below replaces this in M3.
+Without trips there is nothing to spread energy over. Charges and refuels are therefore counted on a **purchase basis**, in the period they happened. A running session counts with its energy and cost so far. This stays the method for manual vehicles such as the VW Up.
+
+From a vehicle's **first trip** on, the battery and tank cost basis below takes over: charges and refuels fill the pools, and trips and idle records are what costs money. Purchases before the first trip keep counting on purchase basis, so nothing is counted twice, except possibly the energy that was still on board at the switch (it is valued at the default prices when it is used).
 
 ## Battery and tank cost basis
 
@@ -73,9 +75,11 @@ on trip or idle (kwh_used, l_used):
     tank_l    -= l_used                    tank_cost -= fuel_cost
 ```
 
-- **Starting state.** When tracking starts, the battery and tank contents are valued at the default prices (fallback electricity price, default fuel price). You can change these values on the vehicle page.
+- **Starting state.** At the first trip, the battery (`battery_start_pct × kwh_per_pct`) and the tank (`fuel_start_l`) are valued at the default prices: the fallback electricity price, and the last refuel price before the first trip (else the default fuel price).
 - **Engine-charged battery** (PHEV, `kwh_used < 0` during a trip): the kWh go into the pool at **€0**. Their cost is already counted as fuel on that same trip, so this avoids counting it twice.
-- **Pools never go negative.** If sensor noise would push a pool below 0, it is clamped at 0. The difference is booked at the default price and flagged in the record's explanation.
+- **Pools never go negative.** If sensor noise would push a pool below 0, it is clamped at 0. The difference is booked at the default price and noted in the trip's explanation.
+- **Order.** Use and purchases are replayed by time. A trip and a refuel seen in the same car report count the trip first, because the refuel came at its end.
+- **Recalculated on every read.** Costs are not stored: each list or summary replays the vehicle's records, so an edited charge price changes every later trip at once.
 - **Why a pool, not "the last charge price"?** Your 0.19 €/kWh home electricity and an occasional 0.59 €/kWh fast charge then blend in proportion. This matches what the energy in the battery actually cost.
 
 ## kWh per percent
@@ -84,9 +88,10 @@ Trips use battery %, while charges are measured in kWh from the wall. The conver
 
 - **Learned automatically** from home sessions with known battery % at start and end, and at least 20 % added:
   `kwh_per_pct = median over the last 10 sessions of (energy_kwh / (soc_end − soc_start))`
+  It needs 3 such sessions. A session that gives less than 0.6× or more than 1.6× the capacity-based value is a bad reading and is skipped.
 - **Until enough sessions exist:** `usable_capacity_kwh / 100 / 0.90`, assuming 90 % charging efficiency.
-- **You can set it yourself** on the Charging → Efficiency card. A manual value disables learning.
-- Changing the factor recalculates trip energy and cost from the moment it changed. The factor's history is kept with a valid-from date.
+- **You can set it yourself** on the Charging → Efficiency card (or the vehicle's *wall kWh per %*). A manual value disables learning.
+- Each trip uses the learned factor of the sessions finished before it, so learning never rewrites old trips. A manual value applies to all trips.
 
 ## Fuel reconciliation
 
@@ -94,7 +99,8 @@ Fuel level sensors are noisy: ±0.5 L from temperature, slope and fuel sloshing.
 
 1. Each trip gets a **provisional** `fuel_l = −Δfuel_l`. A negative value caused by noise is set to 0.
 2. At every **full-tank refuel**, the true use since the previous full tank is known: `litres_used = sum of litres refuelled in between, including this refuel`.
-3. The difference between true use and the sum of provisional trip litres is **spread over those trips in proportion to their distance**. Trip fuel becomes *reconciled* (a ✓ badge in the GUI) and costs are recalculated.
+3. The difference between true use and the sum of provisional trip litres is **spread over those trips in proportion to their distance**. Trip fuel becomes *reconciled* (a ✓ badge in the GUI) and costs are recalculated. Idle litres and litres you entered yourself stay as they are.
+4. This only happens when both refuels have an odometer value and the trips cover at least 80 % of the km in between. Otherwise drives are missing (HA was down) and their fuel would land on the trips that were recorded.
 
 When no full-tank refuels are logged, the values stay provisional. Totals over longer periods are still accurate, because the tank level itself is measured.
 
@@ -106,6 +112,7 @@ When no full-tank refuels are logged, the values stay provisional. Totals over l
 | Fuel consumption (connected car) | `Σ trip L / Σ trip km × 100` → L/100 km, reconciled values where available |
 | Fuel consumption (manual car) | Full-to-full: litres refuelled since the previous full tank / km since then × 100 |
 | Electric share (PHEV) | Share of trip km where `fuel_l` < 0.5 L per 10 km. This is an estimate and is labelled as such. |
+| Fuel consumption (connected car) and energy €/km | Trip-based only for periods that lie fully after the first trip; otherwise the full-to-full and odometer figures are used. |
 | Energy €/km | `(electricity + fuel cost of trips) / trip km` |
 | Total €/km | `all costs in period / km in period` |
 
@@ -131,9 +138,8 @@ A manual vehicle has no trips to spread fuel over. Its fuel cost is therefore co
 
 ## Recalculation
 
-- Any change to a record of vehicle *V* at time *t* (a new record, an edit or a delete) recalculates *V*'s ledger from the nearest record before *t*. That cost-basis state is cached per record, so the replay starts there.
-- Recalculation is done in a background task and usually takes well under a second. The GUI shows *"recalculating…"* until it finishes.
-- `/records/{id}/explain` returns the full calculation of one record: inputs, pool state before and after, prices and their sources.
+- Nothing derived is stored: every request replays the vehicle's records (a few thousand per year take milliseconds), so any change to a charge, refuel or trip is reflected everywhere at once. *(A per-record cache of the cost-basis state can follow when histories grow large.)*
+- Each trip and idle record in the API carries a `costing` block with the full calculation: factor and its source, kWh, kWh price, provisional and reconciled litres, litre price and notes. The Trips page shows it under **Details**.
 
 ## Worked example (Lynk & Co, 2 Nov 2026)
 

@@ -14,6 +14,8 @@ Older data can be entered with its original date. All lists show the full histor
 
 Distance comes from odometer values: the vehicle's starting value, odometer readings, and the odometer of refuels and maintenance. Between two values the km are spread evenly over time. After the last known value there is no estimate, and the overview tells you how far the data goes.
 
+For a car in the AutoLedger Collector, every drive also becomes a **trip** with km, kWh, litres and cost (Trips page). Right after installing the Collector, run the `autoledger.backfill` action (Developer tools → Actions) with a start date to recover the last days from Home Assistant's history.
+
 ## Options
 
 | Option | Meaning |

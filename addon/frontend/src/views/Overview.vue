@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { api, type MonthTotals, type Summary, type VehicleSummary } from '../api'
+import { api, type MonthTotals, type Summary, type Trip, type VehicleSummary } from '../api'
 import ChartBox from '../components/ChartBox.vue'
 import { fmtDate, fmtDateTime, fmtMonth, km, money, num } from '../format'
 import { label, VEHICLE_TYPES } from '../labels'
@@ -33,6 +33,11 @@ const monthly = computed<MonthTotals[]>(() => {
   return state.vehicleId ? (summary.value.vehicles[0]?.monthly ?? []) : summary.value.combined.monthly
 })
 const hasElectricity = computed(() => monthly.value.some((m) => m.electricity_cost > 0))
+
+function tripRoute(t: Trip): string {
+  const from = t.start_address ?? t.start_zone ?? '?'
+  return t.kind === 'round_trip' ? `round trip from ${t.start_zone ?? from}` : `${from} → ${t.end_address ?? t.end_zone ?? '?'}`
+}
 
 function distanceNote(v: VehicleSummary): string | null {
   const known = v.period.distance_known_until
@@ -91,7 +96,11 @@ const costOption = computed(() => {
       },
     },
     xAxis: { type: 'category', data: months.map((m) => fmtMonth(m.month)), ...axisStyle(), splitLine: { show: false } },
-    yAxis: { type: 'value', ...axisStyle(), axisLine: { show: false }, axisLabel: { color: t.muted, formatter: (v: number) => money(v, 0) } },
+    yAxis: {
+      type: 'value', ...axisStyle(), axisLine: { show: false },
+      // Small amounts (a first month with only trips) need cents, or every tick reads "€ 1".
+      axisLabel: { color: t.muted, formatter: (v: number) => money(v, Math.max(...months.map((m) => m.total_cost)) < 10 ? 2 : 0) },
+    },
     series: categories.value.map((c) => ({
       name: c.name,
       type: 'bar',
@@ -180,7 +189,11 @@ const kmOption = computed(() => {
             <div class="stat" v-if="v.vehicle.type !== 'ICE'">
               <div class="label">Electricity</div>
               <div class="value">{{ money(v.period.electricity_cost) }}</div>
-              <div class="sub">{{ num(v.period.electricity_kwh, 1) }} kWh · {{ v.period.charge_count }} charges</div>
+              <div v-if="v.trips_since" class="sub">
+                {{ num(v.period.electricity_kwh, 1) }} kWh used<template v-if="v.period.kwh_per_100km != null"> ·
+                {{ num(v.period.kwh_per_100km, 1) }} kWh/100 km</template>
+              </div>
+              <div v-else class="sub">{{ num(v.period.electricity_kwh, 1) }} kWh · {{ v.period.charge_count }} charges</div>
             </div>
             <div class="stat">
               <div class="label">Maintenance</div>
@@ -198,6 +211,16 @@ const kmOption = computed(() => {
             · {{ v.rolling_12m.total_cost_per_km == null ? '—' : money(v.rolling_12m.total_cost_per_km, 3) }} / km total
             · {{ v.rolling_12m.energy_cost_per_km == null ? '—' : money(v.rolling_12m.energy_cost_per_km, 3) }} / km energy
             <template v-if="v.rolling_12m.fuel_l_per_100km != null"> · {{ num(v.rolling_12m.fuel_l_per_100km, 1) }} L/100 km</template>
+            <template v-if="v.rolling_12m.electric_share != null"> · {{ num(v.rolling_12m.electric_share * 100) }} % of km electric (estimate)</template>
+          </p>
+          <p v-if="v.last_trip" class="small" style="margin: 8px 0 0">
+            Last trip {{ fmtDateTime(v.last_trip.end_ts) }}:
+            <router-link :to="{ path: '/trips', query: $route.query }">{{ tripRoute(v.last_trip) }}</router-link>,
+            {{ num(v.last_trip.distance_km, 1) }} km for {{ money(v.last_trip.costing?.cost) }}
+          </p>
+          <p v-if="v.period.idle_cost >= 0.01" class="small muted" style="margin: 4px 0 0">
+            Climate &amp; standby: {{ num(v.period.idle_kwh, 1) }} kWh<template v-if="v.period.idle_fuel_l"> and
+            {{ num(v.period.idle_fuel_l, 1) }} L</template> for {{ money(v.period.idle_cost) }} (in the energy cost, not in € per km)
           </p>
           <p v-if="v.open_charge" class="small" style="margin: 8px 0 0">
             <b>Charging now</b> since {{ fmtDateTime(v.open_charge.start_ts) }}: {{ num(v.open_charge.energy_kwh, 2) }} kWh,
@@ -265,7 +288,8 @@ const kmOption = computed(() => {
           </table>
         </div>
         <p class="small muted" style="margin: 10px 0 0">
-          Fuel is counted in the month you bought it, so single months can be uneven. The 12-month figures above smooth this out.
+          Cars with recorded trips count fuel and electricity when they are used. Other cars count fuel in the month you
+          bought it, so single months can be uneven; the 12-month figures above smooth this out.
         </p>
       </section>
     </template>

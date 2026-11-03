@@ -4,11 +4,11 @@
   "codeowners": ["@kramat"],
   "config_flow": true,
   "dependencies": ["zone"],
-  "after_dependencies": ["hassio"],
+  "after_dependencies": ["hassio", "recorder"],
   "documentation": "https://github.com/kramat/autoledger/blob/main/docs/collector.md",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/kramat/autoledger/issues",
   "requirements": [],
-  "version": "0.2.1"
+  "version": "0.3.0"
 }

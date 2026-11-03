@@ -60,19 +60,58 @@ def test_sanitize_keeps_last_valid_values():
 
 
 def test_lynk_round_trip_of_2_november():
-    """6 km drive, battery 78 → 66.5 %, fuel 16.4 → 16.0 L: only an odometer reading."""
-    prev = snap("2026-11-02T08:27:06")
-    new = snap("2026-11-02T12:42:56", odometer_km=63445, battery_pct=66.5, fuel_l=16.0)
+    """6 km drive, battery 78 → 66.5 %, fuel 16.4 → 16.0 L: an odometer reading and a round trip."""
+    prev = snap("2026-11-02T08:27:06", trip_meter_km=1375.7, zone="home", lat=52.08928, lon=4.40031)
+    new = snap("2026-11-02T12:42:56", odometer_km=63445, battery_pct=66.5, fuel_l=16.0, trip_meter_km=1382.0,
+               zone="home", lat=52.08929, lon=4.40030)
     found = detect(prev, new, LYNK)
-    assert types(found) == ["odometer.reading"]
+    assert types(found) == ["odometer.reading", "trip.recorded"]
     assert found[0].payload["odometer_km"] == 63445
+    trip = found[1].payload
+    assert trip["distance_km"] == 6.3 and trip["distance_source"] == "trip_meter"
+    assert trip["kind"] == "round_trip" and trip["start_ts_estimated"] is True
+    assert (trip["battery_start_pct"], trip["battery_end_pct"]) == (78.0, 66.5)
+    assert (trip["fuel_start_l"], trip["fuel_end_l"]) == (16.4, 16.0)
+    assert trip["charged_kwh"] == 0 and trip["flags"] == []
+
+
+def test_trip_meter_reset_falls_back_to_odometer():
+    prev = snap("2026-11-02T08:00:00", trip_meter_km=1382.0, lat=52.0, lon=4.0)
+    new = snap("2026-11-02T09:00:00", odometer_km=63459, trip_meter_km=3.1, lat=52.1, lon=4.3)
+    trip = detect(prev, new, LYNK)[1].payload
+    assert trip["distance_km"] == 20 and trip["distance_source"] == "odometer"
+    assert trip["kind"] == "one_way"
+
+
+def test_home_charge_during_a_trip_window_is_counted():
+    """No report between parking and charging: the counter tells how much went in."""
+    prev = snap("2026-11-02T08:00:00", battery_pct=78.0)
+    new = snap("2026-11-03T06:00:00", odometer_km=63445, battery_pct=100.0, charger_kwh=1010.0)
+    trip = detect(prev, new, LYNK)[1]
+    assert trip.payload["charged_kwh"] == 7.0 and trip.flags == ["charge_in_window"]
+
+
+def test_idle_use_while_parked():
+    prev = snap("2026-11-02T18:00:00", battery_pct=66.5)
+    new = snap("2026-11-03T07:30:00", battery_pct=64.0, fuel_l=16.2, zone="home")
+    [idle] = detect(prev, new, LYNK)
+    assert idle.type == "idle.recorded"
+    assert (idle.payload["battery_start_pct"], idle.payload["battery_end_pct"]) == (66.5, 64.0)
+    assert idle.payload["fuel_start_l"] is None  # 0.2 L is fuel gauge noise
+
+
+def test_no_idle_while_charging_at_home():
+    prev = snap("2026-11-02T18:00:00", battery_pct=66.5)
+    new = snap("2026-11-03T07:30:00", battery_pct=65.0, charger_kwh=1003.5)
+    assert detect(prev, new, LYNK) == []
 
 
 def test_refuel_detected():
     prev = snap("2026-11-02T08:00:00")
     new = snap("2026-11-02T09:00:00", fuel_l=49.9, address="Shell Voorburg", odometer_km=63441)
     found = detect(prev, new, LYNK)
-    assert types(found) == ["odometer.reading", "refuel.detected"]
+    assert types(found) == ["odometer.reading", "refuel.detected", "trip.recorded"]
+    assert found[2].flags == ["refuel_in_window"]
     refuel = found[1].payload
     assert refuel["litres_estimated"] == 33.5
     assert refuel["place"]["address"] == "Shell Voorburg"
@@ -98,8 +137,10 @@ def test_battery_up_while_driving_is_flagged():
     prev = snap("2026-11-01T10:00:00", battery_pct=20.0)
     new = snap("2026-11-01T11:00:00", battery_pct=26.0, odometer_km=63480, charging=False)
     found = detect(prev, new, LYNK)
-    assert types(found) == ["odometer.reading", "external_charge.detected"]
+    assert types(found) == ["odometer.reading", "external_charge.detected", "trip.recorded"]
     assert found[1].flags == ["driving_in_window", "possible_engine_charge"]
+    # A possible engine charge is not added to the trip: the battery rise stays a rise.
+    assert found[2].payload["charged_kwh"] == 0
 
 
 def test_small_changes_are_noise():
@@ -191,3 +232,10 @@ def test_tiny_sessions_are_dropped():
     assert machine.active
     assert machine.tick(t + timedelta(minutes=30)) == []
     assert not machine.active
+
+
+def test_trip_meter_that_lags_behind_is_not_used():
+    prev = snap("2026-11-02T08:00:00", trip_meter_km=1382.0)
+    new = snap("2026-11-02T09:00:00", odometer_km=63446, trip_meter_km=1382.0)
+    trip = detect(prev, new, LYNK)[1].payload
+    assert trip["distance_km"] == 7 and trip["distance_source"] == "odometer"

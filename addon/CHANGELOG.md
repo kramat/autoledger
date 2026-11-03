@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Trips: every drive of a car in the AutoLedger Collector with km, kWh, litres and cost, on a list or a map.
+  Details show how the cost was calculated; split a trip with a stop, merge two, or add one by hand.
+- Energy is now counted when it is used: charges and refuels fill the battery and the tank, trips use them
+  at their average price. Before a car's first trip, purchases count as before.
+- Fuel per trip is corrected at every full tank. kWh per battery % is learned from home charges
+  (Charging → Efficiency), or set by you.
+- Climate & standby: energy used while parked, in the energy cost but not in € per km.
+- Overview: last trip, kWh/100 km and the electric share of km.
+
 ## 0.2.0
 
 - Charging: home sessions from the AutoLedger Collector (priced per kWh with your electricity price),

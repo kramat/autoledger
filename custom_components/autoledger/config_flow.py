@@ -42,6 +42,9 @@ from .const import (
     CONF_CHARGER_VEHICLE,
     CONF_ENERGY,
     CONF_EXTERNAL_CHARGE_MIN_PCT,
+    CONF_IDLE_MIN_L,
+    CONF_IDLE_MIN_PCT,
+    CONF_MIN_TRIP_KM,
     CONF_FIXED_PRICE,
     CONF_FUEL_UNIT,
     CONF_MIN_SESSION_KWH,
@@ -342,11 +345,13 @@ def _vehicle_schema(vehicle_type: str, with_odometer: bool = False) -> vol.Schem
         fields[vol.Optional(ROLE_CHARGING)] = _entity(["sensor", "binary_sensor"])
         fields[vol.Optional(ROLE_PLUG)] = _entity(["sensor", "binary_sensor"])
     fields[vol.Optional(ROLE_CAR_TIMESTAMP)] = _entity("sensor")
-    thresholds = {
-        vol.Required(CONF_REFUEL_MIN_L, default=3.0): _number(0.5, 50, 0.5, "L"),
-    }
+    thresholds = {vol.Required(CONF_MIN_TRIP_KM, default=0.5): _number(0.1, 10, 0.1, "km")}
+    if vehicle_type in ("PHEV", "ICE"):
+        thresholds[vol.Required(CONF_REFUEL_MIN_L, default=3.0)] = _number(0.5, 50, 0.5, "L")
+        thresholds[vol.Required(CONF_IDLE_MIN_L, default=0.5)] = _number(0.1, 10, 0.1, "L")
     if vehicle_type in ("PHEV", "BEV"):
         thresholds[vol.Required(CONF_EXTERNAL_CHARGE_MIN_PCT, default=3.0)] = _number(1, 50, 0.5, "%")
+        thresholds[vol.Required(CONF_IDLE_MIN_PCT, default=1.0)] = _number(0.5, 20, 0.5, "%")
     fields[vol.Required(CONF_THRESHOLDS)] = section(vol.Schema(thresholds), {"collapsed": True})
     return vol.Schema(fields)
 

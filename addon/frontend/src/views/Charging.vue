@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { api, type Charge } from '../api'
+import { computed, reactive, ref, watch } from 'vue'
+import { api, type Charge, type VehicleSummary } from '../api'
 import DataTable, { type Column } from '../components/DataTable.vue'
 import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDateTime, money, nowLocalInput, num } from '../format'
-import { CHARGE_KINDS, label, PRICE_MODES } from '../labels'
-import { activeVehicles, loadReviewCount, state, vehicleName } from '../store'
+import { CHARGE_KINDS, FACTOR_MODES, label, PRICE_MODES } from '../labels'
+import { activeVehicles, loadReviewCount, loadVehicles, state, toast, vehicleName } from '../store'
 import { useCrud } from '../useCrud'
 
 const params = () => ({ vehicle_id: state.vehicleId || undefined })
@@ -66,6 +66,25 @@ const totals = computed(() => ({
   cost: crud.items.value.reduce((sum, c) => sum + c.cost, 0),
 }))
 
+// --- Efficiency: wall kWh per battery % (docs/costs.md#kwh-per-percent) --------
+
+const efficiency = ref<VehicleSummary[]>([])
+const manualInput = reactive<Record<string, string>>({})
+
+async function loadEfficiency(): Promise<void> {
+  const summary = await api.summary({ vehicle_id: state.vehicleId || undefined, months: 1 })
+  efficiency.value = summary.vehicles.filter((v) => v.vehicle.type !== 'ICE' && v.efficiency)
+}
+watch(() => [state.vehicleId, crud.items.value], () => loadEfficiency().catch(() => undefined), { immediate: true })
+
+async function setFactor(v: VehicleSummary, value: number | null): Promise<void> {
+  await api.update('vehicles', v.vehicle.id, { kwh_per_pct: value })
+  await loadVehicles()
+  await loadEfficiency()
+  manualInput[v.vehicle.id] = ''
+  toast(value == null ? 'Using the learned value' : 'kWh per % saved')
+}
+
 function add(): void {
   crud.openCreate({
     vehicle_id: defaultVehicleId(),
@@ -107,8 +126,53 @@ function add(): void {
       Home sessions are priced per kWh at the moment it was delivered, using your electricity price sensor. Edit a
       session to set your own price, a total, or mark it free.
     </p>
+
+    <section v-for="v in efficiency" :key="v.vehicle.id" class="card efficiency">
+      <h2>Efficiency · {{ v.vehicle.name }}</h2>
+      <p>
+        Trips use <b>{{ num(v.efficiency!.kwh_per_pct, 3) }} kWh from the wall per battery %</b>
+        ({{ label(FACTOR_MODES, v.efficiency!.mode) }}), so a full battery costs
+        {{ num(v.efficiency!.kwh_per_pct * 100, 1) }} kWh of charging, losses included.
+      </p>
+      <p class="small muted">
+        <template v-if="v.efficiency!.learned != null">
+          Learned: {{ num(v.efficiency!.learned, 3) }}, the median of the last {{ Math.min(v.efficiency!.learnable_sessions, 10) }}
+          home charges that added at least 20 %.
+        </template>
+        <template v-else>
+          Learning needs 3 home charges that add at least 20 % with the battery % known; {{ v.efficiency!.learnable_sessions }} so far.
+        </template>
+        <template v-if="v.efficiency!.default != null"> From the battery capacity: {{ num(v.efficiency!.default, 3) }}.</template>
+      </p>
+      <form class="factor-form" @submit.prevent="setFactor(v, Number(manualInput[v.vehicle.id]))">
+        <label class="field">
+          <span>Set it yourself (kWh per %)</span>
+          <input v-model="manualInput[v.vehicle.id]" type="number" step="0.001" min="0.01" max="2" required
+            :placeholder="num(v.efficiency!.kwh_per_pct, 3)" />
+        </label>
+        <button type="submit">Save</button>
+        <button v-if="v.efficiency!.mode === 'manual'" type="button" @click="setFactor(v, null)">
+          Use the learned value
+        </button>
+      </form>
+    </section>
     <RecordDialog v-if="crud.dialog.value" :title="crud.dialog.value.mode === 'create' ? 'Add charge' : 'Edit charge'"
       :fields="fields" :initial="crud.dialog.value.initial" :mode="crud.dialog.value.mode" :save="crud.save"
       @close="crud.dialog.value = null" />
   </div>
 </template>
+
+<style scoped>
+.efficiency {
+  margin-top: 16px;
+}
+.factor-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.factor-form .field {
+  max-width: 220px;
+}
+</style>

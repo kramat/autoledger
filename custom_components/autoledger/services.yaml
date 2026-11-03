@@ -102,3 +102,15 @@ add_odometer:
         datetime:
 
 resync:
+
+backfill:
+  fields:
+    vehicle:
+      required: true
+      selector:
+        device:
+          integration: autoledger
+    start:
+      required: true
+      selector:
+        date:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 import voluptuous as vol
 
@@ -137,6 +138,23 @@ def _register_services(hass: HomeAssistant) -> None:
             "odometer_km": data["odometer"],
         })
 
+    async def backfill(call: ServiceCall) -> ServiceResponse:
+        runtime = _runtime(hass)
+        vehicle_id = _vehicle_id(hass, call.data[ATTR_VEHICLE])
+        tracker = next((t for t in runtime.vehicles.values() if t.params.vehicle_id == vehicle_id), None)
+        if tracker is None:
+            raise ServiceValidationError("This vehicle has no Collector vehicle entry", translation_domain=DOMAIN,
+                                         translation_key="not_collected")
+        start = call.data["start"]
+        start = dt_util.as_utc(start if isinstance(start, datetime) else dt_util.start_of_local_day(start))
+        try:
+            result = await tracker.backfill(start)
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        await runtime.outbox.flush()
+        await runtime.coordinator.async_request_refresh()
+        return result
+
     async def resync(call: ServiceCall) -> None:
         runtime = _runtime(hass)
         await runtime.outbox.flush()
@@ -155,5 +173,8 @@ def _register_services(hass: HomeAssistant) -> None:
     }), supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "add_odometer", add_odometer, schema=vol.Schema({
         **vehicle, **when, vol.Required("odometer"): positive,
+    }), supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "backfill", backfill, schema=vol.Schema({
+        **vehicle, vol.Required("start"): vol.Any(cv.datetime, cv.date),
     }), supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "resync", resync)

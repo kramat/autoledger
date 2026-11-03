@@ -33,10 +33,10 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 `name`, `plate`, `make`, `model`, `year`, `type` (`ICE`/`PHEV`/`BEV`), `fuel_type`, `tank_l`, `battery_usable_kwh`, `tracking` (`collector`/`manual`), `start_odometer_km`, `start_date`, `start_battery_value`, `start_tank_value`, `purchase_price`, `purchase_date`, `resale_estimate`, `resale_date`, `depreciation_enabled`, `color`, `icon`, `archived_at`
 
 ### `trips`
-`vehicle_id`, `start_ts`, `start_ts_estimated`, `end_ts`, `start_lat`, `start_lon`, `start_address`, `start_zone`, `end_lat`, `end_lon`, `end_address`, `end_zone`, `kind` (`one_way`/`round_trip`), `odometer_start`, `odometer_end`, `distance_km`, `distance_source`, `battery_start_pct`, `battery_end_pct`, `energy_kwh`, `fuel_start_l`, `fuel_end_l`, `fuel_l`, `fuel_reconciled`, `note`, `merged_from` (JSON)
+`vehicle_id`, `start_ts`, `start_ts_estimated`, `end_ts`, `start_lat`, `start_lon`, `start_address`, `start_zone`, `end_lat`, `end_lon`, `end_address`, `end_zone`, `kind` (`one_way`/`round_trip`), `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`/`manual`), `battery_start_pct`, `battery_end_pct`, `battery_used_pct` (start − end; summed when merged), `charged_kwh` (charged within the window), `energy_kwh` (only when set by hand), `fuel_start_l`, `fuel_end_l`, `fuel_l` (provisional), `origin` (JSON: `merged_from` or `split_from`), `note`. Energy, reconciled litres and cost are derived by the ledger, not stored.
 
 ### `idle_records`
-`vehicle_id`, `start_ts`, `end_ts`, `battery_delta_pct`, `energy_kwh`, `fuel_l`
+`vehicle_id`, `start_ts`, `end_ts`, `zone`, `battery_start_pct`, `battery_end_pct`, `battery_used_pct`, `energy_kwh` (only when set by hand), `fuel_l`, `note`
 
 ### `charge_sessions`
 `vehicle_id` (NULL until assigned), `session_key` (the collector's `session_id`, unique), `kind` (`home`/`public`/`manual`), `charger_key`, `charger_name`, `start_ts`, `end_ts`, `is_open`, `lat`, `lon`, `address`, `provider`, `energy_kwh`, `energy_estimated`, `soc_start`, `soc_end`, `price_mode` (`samples`/`per_kwh`/`total`/`free`), `price_per_kwh`, `price_total`, `session_fee`, `auto_cost` (the collector's), `cost` (effective), `price_samples` (JSON: ts, kWh, price, source), `note`
@@ -65,11 +65,11 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 ### `ingest_events`
 `uuid` (primary key), `type`, `vehicle_id`, `occurred_at`, `received_at`, `payload` (JSON), `result` (`applied`/`rejected`), `record_id`, `error`. This is the audit log, kept for 1 year by default.
 
-### `ledger_states`
-`vehicle_id`, `record_type`, `record_id`, `ts`, `pool_kwh`, `pool_cost`, `tank_l`, `tank_cost`, `electricity_cost`, `fuel_cost`. These are the cached replay states (see [costs.md](costs.md#recalculation)).
+### `ledger_states` *(not built)*
+A cache of the replay states per record. Not needed yet: costs are recalculated on every request (see [costs.md](costs.md#recalculation)).
 
-### `efficiency_factors`
-`vehicle_id`, `valid_from`, `kwh_per_pct`, `mode` (`default`/`learned`/`manual`), `based_on` (JSON session ids)
+### `efficiency_factors` *(not built)*
+Not needed: the learned factor at any moment follows from the home sessions finished before it, and the manual value is the vehicle's `kwh_per_pct` (see [costs.md](costs.md#kwh-per-percent)).
 
 ### `settings`
 `key`, `value` (JSON)

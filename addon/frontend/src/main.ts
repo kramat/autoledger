@@ -16,6 +16,7 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', component: Overview },
+    { path: '/trips', component: () => import('./views/Trips.vue') }, // the map library loads only here
     { path: '/fuel', component: Fuel },
     { path: '/charging', component: Charging },
     { path: '/review', component: Review },

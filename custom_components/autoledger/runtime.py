@@ -6,13 +6,17 @@ import logging
 from collections import deque
 from collections.abc import Callable
 from dataclasses import replace
+from bisect import bisect_right
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4, uuid5
 
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.components.zone import async_active_zone
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -24,6 +28,9 @@ from .const import (
     CONF_CHARGER_VEHICLE,
     CONF_ENERGY,
     CONF_EXTERNAL_CHARGE_MIN_PCT,
+    CONF_IDLE_MIN_L,
+    CONF_IDLE_MIN_PCT,
+    CONF_MIN_TRIP_KM,
     CONF_FIXED_PRICE,
     CONF_FUEL_UNIT,
     CONF_MIN_SESSION_KWH,
@@ -41,6 +48,7 @@ from .const import (
     EVENT_CHARGE_COMPLETED,
     EVENT_REFUEL_DETECTED,
     EVENT_REVIEW_NEEDED,
+    EVENT_TRIP_RECORDED,
     ROLE_ADDRESS,
     ROLE_BATTERY,
     ROLE_CAR_TIMESTAMP,
@@ -70,6 +78,8 @@ _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
 MILES = 1.609344
 HISTORY = 48  # snapshots kept per vehicle for battery look-ups
+# Backfilled events get uuids derived from vehicle, type and time, so a second run adds nothing.
+BACKFILL_NAMESPACE = UUID("6f1c2a4e-3b7d-5e9a-8c1f-2d4b6a8e0c13")
 
 
 class Runtime:
@@ -141,10 +151,12 @@ class Runtime:
         _LOGGER.debug(message)
 
     @callback
-    def emit(self, type_: str, vehicle_id: str | None, occurred_at: str, payload: dict) -> None:
+    def emit(
+        self, type_: str, vehicle_id: str | None, occurred_at: str, payload: dict, uuid: str | None = None
+    ) -> None:
         self.outbox.add(
             {
-                "uuid": str(uuid4()),
+                "uuid": uuid or str(uuid4()),
                 "type": type_,
                 "vehicle_id": vehicle_id,
                 "source": "collector",
@@ -176,6 +188,12 @@ class Runtime:
                 self.hass.bus.async_fire(
                     EVENT_REVIEW_NEEDED,
                     {**base, "reason": "public_charge_price", "energy_kwh": payload["energy_kwh_estimated"]},
+                )
+            elif event["type"] == "trip.recorded":
+                self.hass.bus.async_fire(
+                    EVENT_TRIP_RECORDED,
+                    {**base, "distance_km": payload["distance_km"], "start_ts": payload["start_ts"],
+                     "end_ts": payload["end_ts"], "kind": payload["kind"]},
                 )
         if self.coordinator is not None:
             self.hass.async_create_task(self.coordinator.async_request_refresh())
@@ -218,11 +236,15 @@ class VehicleTracker:
             kwh_per_pct=vehicle.get("kwh_per_pct"),
             external_charge_min_pct=thresholds.get(CONF_EXTERNAL_CHARGE_MIN_PCT, 3.0),
             refuel_min_l=thresholds.get(CONF_REFUEL_MIN_L, 3.0),
+            min_distance_km=thresholds.get(CONF_MIN_TRIP_KM, 0.5),
+            idle_min_pct=thresholds.get(CONF_IDLE_MIN_PCT, 1.0),
+            idle_min_l=thresholds.get(CONF_IDLE_MIN_L, 0.5),
         )
         self.fuel_unit = data.get(CONF_FUEL_UNIT, "L")
         self.roles: dict[str, str] = {role: data[role] for role in VEHICLE_ROLES if data.get(role)}
         self._unsub: Callable[[], None] | None = None
         self._pending: Callable[[], None] | None = None
+        self._get: Callable[[str], State | None] = self.hass.states.get  # swapped during backfill
 
     @property
     def last(self) -> Snapshot | None:
@@ -279,7 +301,7 @@ class VehicleTracker:
 
     def _state(self, role: str) -> str | None:
         entity_id = self.roles.get(role)
-        state = self.hass.states.get(entity_id) if entity_id else None
+        state = self._get(entity_id) if entity_id else None
         return state.state if state else None
 
     def _number(self, role: str) -> float | None:
@@ -287,7 +309,7 @@ class VehicleTracker:
 
     def _distance(self, role: str) -> float | None:
         value = self._number(role)
-        state = self.hass.states.get(self.roles.get(role, ""))
+        state = self._get(self.roles.get(role, ""))
         if value is not None and state and state.attributes.get("unit_of_measurement") == "mi":
             value *= MILES
         return value
@@ -300,15 +322,14 @@ class VehicleTracker:
 
     def _position(self) -> tuple[float | None, float | None]:
         if ROLE_TRACKER in self.roles:
-            state = self.hass.states.get(self.roles[ROLE_TRACKER])
+            state = self._get(self.roles[ROLE_TRACKER])
             if state:
                 lat, lon = state.attributes.get("latitude"), state.attributes.get("longitude")
                 if lat is not None and lon is not None:
                     return float(lat), float(lon)
         return self._number(ROLE_LATITUDE), self._number(ROLE_LONGITUDE)
 
-    def _timestamp(self, previous: Snapshot | None) -> datetime:
-        now = dt_util.utcnow()
+    def _timestamp(self, previous: Snapshot | None, now: datetime) -> datetime:
         reported = dt_util.parse_datetime(self._state(ROLE_CAR_TIMESTAMP) or "")
         if reported is not None:
             reported = dt_util.as_utc(reported)
@@ -316,18 +337,18 @@ class VehicleTracker:
                 return reported
         return now
 
-    def build(self) -> Snapshot:
-        previous = self.last
+    def build(self, previous: Snapshot | None = None, now: datetime | None = None) -> Snapshot:
+        """Read all mapped values; ``now`` is the moment of the states (backfill), default now."""
         lat, lon = self._position()
         zone = None
         if lat is not None and lon is not None:
             active = async_active_zone(self.hass, lat, lon)
             zone = active.name if active else None
-        charger_values = [parse_float(self.hass.states.get(e).state) if self.hass.states.get(e) else None
+        charger_values = [parse_float(state.state) if (state := self._get(e)) else None
                           for e in self.charger_entities()]
         charger_kwh = sum(charger_values) if charger_values and None not in charger_values else None
         return Snapshot(
-            ts=self._timestamp(previous),
+            ts=self._timestamp(previous, now or dt_util.utcnow()),
             odometer_km=self._distance(ROLE_ODOMETER),
             trip_meter_km=self._distance(ROLE_TRIP_METER),
             battery_pct=self._number(ROLE_BATTERY),
@@ -347,10 +368,11 @@ class VehicleTracker:
     def _take_snapshot(self, _now=None) -> None:
         self._pending = None
         previous = self.last
-        snapshot, notes = sanitize(self.build(), previous, self.params.tank_l)
+        snapshot, notes = sanitize(self.build(previous), previous, self.params.tank_l)
         for note in notes:
             self.runtime.log(f"{self.name}: {note}")
         if previous is None:
+            self.state["since"] = dt_util.utcnow().isoformat()
             self._commit(snapshot)
             self.runtime.log(f"{self.name}: first snapshot stored as baseline")
             return
@@ -362,6 +384,56 @@ class VehicleTracker:
             self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, found.payload)
         self._commit(snapshot)
         self._send_pending_soc(snapshot)
+
+    # --- backfill -----------------------------------------------------------
+
+    def tracking_since(self) -> datetime | None:
+        """When live tracking began: backfill stops there, so nothing is detected twice."""
+        if self.state.get("since"):
+            return dt_util.parse_datetime(self.state["since"])
+        history = self.state.get("history") or []
+        return dt_util.parse_datetime(history[0][0]) if history else None
+
+    async def backfill(self, start: datetime) -> dict:
+        """Replay recorder history through the detectors (docs/collector.md#backfill)."""
+        end = self.tracking_since() or dt_util.utcnow()
+        if start >= end:
+            raise ValueError(f"The start must be before {end.isoformat()}, when live tracking began")
+        entity_ids = [*self.roles.values(), *self.charger_entities()]
+        history: dict[str, list[State]] = await get_instance(self.hass).async_add_executor_job(
+            partial(
+                get_significant_states, self.hass, start, end, entity_ids,
+                include_start_time_state=True, significant_changes_only=False,
+            )
+        )
+        car = set(self.roles.values())
+        changes = sorted({s.last_updated for e in car for s in history.get(e, []) if start <= s.last_updated <= end})
+        # One snapshot per burst of changes, as in live mode (SNAPSHOT_DEBOUNCE quiet seconds).
+        moments = [t for t, nxt in zip(changes, [*changes[1:], None])
+                   if nxt is None or (nxt - t).total_seconds() > SNAPSHOT_DEBOUNCE]
+
+        previous: Snapshot | None = None
+        snapshots = events = 0
+        try:
+            for moment in moments:
+                states = {e: _state_at(history.get(e, []), moment) for e in entity_ids}
+                self._get = states.get
+                snapshot, _notes = sanitize(self.build(previous, moment), previous, self.params.tank_l)
+                if previous is not None and snapshot.same_values(previous):
+                    continue
+                snapshots += 1
+                if previous is not None:
+                    for found in detect(previous, snapshot, self.params):
+                        key = f"{self.params.vehicle_id}|{found.type}|{found.occurred_at}"
+                        self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, found.payload,
+                                          uuid=str(uuid5(BACKFILL_NAMESPACE, key)))
+                        events += 1
+                previous = snapshot
+        finally:
+            self._get = self.hass.states.get
+        self.runtime.log(f"{self.name}: backfill {start.isoformat()} → {end.isoformat()}: "
+                         f"{snapshots} snapshots, {events} events")
+        return {"from": start.isoformat(), "until": end.isoformat(), "snapshots": snapshots, "events": events}
 
     def _commit(self, snapshot: Snapshot) -> None:
         self.state["last"] = snapshot.to_dict()
@@ -402,6 +474,12 @@ class VehicleTracker:
             else:
                 remaining.append(pending)
         self.state["pending_soc"] = remaining
+
+
+def _state_at(states: list[State], moment: datetime) -> State | None:
+    """The last state at or before ``moment`` (``states`` is in time order)."""
+    index = bisect_right([s.last_updated for s in states], moment)
+    return states[index - 1] if index else None
 
 
 class ChargerTracker:

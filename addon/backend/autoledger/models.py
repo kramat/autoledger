@@ -139,6 +139,66 @@ class ChargeSession(RecordMixin, AutoMixin, Base):
     note: Mapped[str | None] = mapped_column(Text)
 
 
+class Trip(RecordMixin, AutoMixin, Base):
+    """A drive between two car reports (snapshot mode), or entered by hand.
+
+    Energy and cost are not stored: the ledger derives them from the battery % used
+    and the kWh-per-% factor at that moment, unless the user set ``energy_kwh``
+    (then it is in ``locked_fields``).
+    """
+
+    __tablename__ = "trips"
+    __table_args__ = (Index("ix_trips_vehicle_start", "vehicle_id", "start_ts"),)
+
+    vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"))
+    start_ts: Mapped[dt.datetime] = mapped_column(UTCDateTime)
+    start_ts_estimated: Mapped[bool] = mapped_column(Boolean, default=False)
+    end_ts: Mapped[dt.datetime] = mapped_column(UTCDateTime)
+    start_lat: Mapped[float | None] = mapped_column(Float)
+    start_lon: Mapped[float | None] = mapped_column(Float)
+    start_address: Mapped[str | None] = mapped_column(String(200))
+    start_zone: Mapped[str | None] = mapped_column(String(80))
+    end_lat: Mapped[float | None] = mapped_column(Float)
+    end_lon: Mapped[float | None] = mapped_column(Float)
+    end_address: Mapped[str | None] = mapped_column(String(200))
+    end_zone: Mapped[str | None] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(10), default="one_way")  # one_way | round_trip
+    odometer_start: Mapped[float | None] = mapped_column(Float)
+    odometer_end: Mapped[float | None] = mapped_column(Float)
+    distance_km: Mapped[float] = mapped_column(Float)
+    distance_source: Mapped[str] = mapped_column(String(12), default="manual")  # trip_meter | odometer | manual
+    battery_start_pct: Mapped[float | None] = mapped_column(Float)
+    battery_end_pct: Mapped[float | None] = mapped_column(Float)
+    # Battery % that went down (start − end; summed for merged trips).
+    battery_used_pct: Mapped[float | None] = mapped_column(Float)
+    # Wall kWh charged within the same window (home counter or public estimate): also used on this trip.
+    charged_kwh: Mapped[float] = mapped_column(Float, default=0)
+    energy_kwh: Mapped[float | None] = mapped_column(Float)  # user value; None = derived
+    fuel_start_l: Mapped[float | None] = mapped_column(Float)
+    fuel_end_l: Mapped[float | None] = mapped_column(Float)
+    fuel_l: Mapped[float] = mapped_column(Float, default=0)  # provisional litres, never negative
+    origin: Mapped[dict] = mapped_column(JSON, default=dict)  # {"merged_from": [...]} | {"split_from": id}
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class IdleRecord(RecordMixin, AutoMixin, Base):
+    """Energy used while parked (pre-climate, standby), costed but kept out of €/km."""
+
+    __tablename__ = "idle_records"
+    __table_args__ = (Index("ix_idle_vehicle_start", "vehicle_id", "start_ts"),)
+
+    vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"))
+    start_ts: Mapped[dt.datetime] = mapped_column(UTCDateTime)
+    end_ts: Mapped[dt.datetime] = mapped_column(UTCDateTime)
+    zone: Mapped[str | None] = mapped_column(String(80))
+    battery_start_pct: Mapped[float | None] = mapped_column(Float)
+    battery_end_pct: Mapped[float | None] = mapped_column(Float)
+    battery_used_pct: Mapped[float | None] = mapped_column(Float)
+    energy_kwh: Mapped[float | None] = mapped_column(Float)  # user value; None = derived
+    fuel_l: Mapped[float] = mapped_column(Float, default=0)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
 class ReviewItem(RecordMixin, Base):
     """Something the system was not sure about and needs the user's input."""
 

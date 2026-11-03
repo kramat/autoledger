@@ -32,29 +32,27 @@ The collector is deliberately **thin**. It detects, packages and delivers events
 ```
 Collector (custom_components/autoledger)
 ├── config_flow.py        connection to the add-on + "vehicle" subentries + "charger" subentries
-├── snapshot.py           builds a Snapshot from the mapped entities on every relevant change
-├── detectors/
-│   ├── trip.py           odometer / trip-meter deltas between snapshots → trips
-│   ├── home_charge.py    charger kWh counter → charge sessions, priced per kWh increment
-│   ├── external_charge.py battery % up without home kWh → public charge (needs price)
-│   ├── refuel.py         fuel level jump → refuel (needs price)
-│   └── idle.py           battery/fuel drop without km → idle consumption (climate, standby)
+├── runtime.py            per vehicle: snapshots on every relevant change, detection, backfill;
+│                         per charger: the session machine; the store and the outbox
+├── engine/               pure logic, tested without HA
+│   ├── snapshot.py       Snapshot, parsing and sanitizing of entity states
+│   ├── detect.py         between two snapshots: trip, idle use, refuel, public charge, odometer
+│   └── charging.py       charger kWh counter → charge sessions, priced per kWh increment
 ├── outbox.py             persisted queue of unsent events, retried with backoff
 ├── client.py             REST client for the add-on API
 ├── coordinator.py        polls /summary for the exposed sensors
 ├── sensor.py / binary_sensor.py
-├── services.yaml         manual entry services
+├── services.yaml         manual entry services and backfill
 └── diagnostics.py
 
-Add-on (addon/)
-├── backend/
-│   ├── api/              FastAPI routers (/api/v1/...)
-│   ├── ingest/           validates and stores collector events, idempotent
-│   ├── ledger/           cost engine: replays records per vehicle, cost basis, reconciliation
-│   ├── reports/          aggregations, CSV/XLSX export
-│   ├── reminders/        maintenance due calculation
-│   └── db/               SQLAlchemy models + Alembic migrations
+Add-on (addon/backend/autoledger, addon/frontend)
+├── api/                  FastAPI routers (/api/v1/...): generic CRUD, trips (split/merge), inbox, summary, export
+├── ingest.py             validates and stores collector events, idempotent
+├── ledger.py             cost engine: replays records per vehicle, cost basis, kWh per %, reconciliation
+├── book.py               loads a vehicle's records into the ledger
+├── models.py, migrations/ SQLAlchemy models + Alembic migrations
 └── frontend/             Vue 3 single-page app, served under the Ingress path
+                          (reports and maintenance reminders follow in M4)
 ```
 
 ## Data flow

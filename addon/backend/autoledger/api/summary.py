@@ -85,6 +85,9 @@ def summary(
                 "last_refuel": schemas.RefuelOut.model_validate(last_refuel) if last_refuel else None,
                 "open_charge": schemas.ChargeOut.model_validate(open_charge) if open_charge else None,
                 "last_charge": schemas.ChargeOut.model_validate(last_charge) if last_charge else None,
+                "last_trip": _last_trip(db, book),
+                "efficiency": _efficiency(book),
+                "trips_since": book.trips_since,
                 "monthly": _monthly(ranges, monthly),
             }
         )
@@ -100,6 +103,31 @@ def summary(
             "period": reduce(add, period_totals, PeriodTotals()).as_dict(),
             "monthly": _monthly(ranges, combined_monthly or [PeriodTotals() for _ in ranges]),
         },
+    }
+
+
+def _last_trip(db: Session, book) -> schemas.TripOut | None:
+    data = book.last_trip
+    if data is None:
+        return None
+    trip = schemas.TripOut.model_validate(db.get(models.Trip, data.id))
+    trip.costing = schemas.TripCostOut(**book.trip_costs[data.id].as_dict())
+    return trip
+
+
+def _efficiency(book) -> dict | None:
+    """The kWh-per-% factor in use now (docs/costs.md#kwh-per-percent)."""
+    factor = book.factors.at()
+    if factor is None:
+        return None
+    learned = book.factors.learned()
+    return {
+        "kwh_per_pct": factor.value,
+        "mode": factor.mode,
+        "sessions": list(factor.sessions),
+        "learnable_sessions": len(book.factors.samples),
+        "learned": learned.value if learned else None,
+        "default": round(book.factors.default, 4) if book.factors.default else None,
     }
 
 

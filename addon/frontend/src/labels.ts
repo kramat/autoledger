@@ -61,6 +61,17 @@ export const PRICE_MODES: Option[] = [
   { value: 'samples', label: 'Live electricity price (home charger)' },
 ]
 
+export const TRIP_KINDS: Option[] = [
+  { value: 'one_way', label: 'One way' },
+  { value: 'round_trip', label: 'Round trip' },
+]
+
+export const FACTOR_MODES: Option[] = [
+  { value: 'manual', label: 'set by you' },
+  { value: 'learned', label: 'learned from home charges' },
+  { value: 'default', label: 'from battery capacity' },
+]
+
 export const REVIEW_REASONS: Record<string, string> = {
   refuel_price: 'Refuel detected: check the litres and enter what you paid',
   public_charge_price: 'Charge away from home: enter what you paid',

@@ -15,7 +15,7 @@ The add-on holds every record, calculates every cost and offers the web GUI. It 
 |---|---|
 | Overview, Fuel (refuels + odometer readings), Maintenance (log), Costs, Vehicles, Settings, CSV export | **M1** (built) |
 | Charging, Review inbox | **M2** (built) |
-| Trips | M3 |
+| Trips (list, map, details, split, merge), climate & standby, efficiency card | **M3** (built) |
 | Maintenance schedules and reminders, Reports, XLSX, JSON backup, CSV import | M4 |
 | Attachments, depreciation | M5 |
 
@@ -83,7 +83,7 @@ Below the cards:
   - date, place (*home* / address);
   - kWh, battery % from → to, duration;
   - average €/kWh, cost, source (*home charger*, *public*, *manual*).
-- **Home sessions** show the price curve over the session when a dynamic price entity was used. A running session is shown live.
+- **Home sessions** are priced per kWh at the moment it was delivered. A running session is shown live. *(A price curve per session follows later.)*
 - **Edit price**, three ways:
   - set €/kWh;
   - set the total amount;
@@ -91,7 +91,7 @@ Below the cards:
 
   Editing re-prices this session and, through the [battery cost basis](costs.md#battery-and-tank-cost-basis), all trips after it.
 - **Add public charge**: date, place, kWh (or battery % from → to, converted to kWh), price or total, and optionally a session fee and a provider.
-- **Efficiency card**: the learned *kWh from the wall per battery %*, with the sessions it is based on. You can override the value.
+- **Efficiency card** per car with a battery: the *kWh from the wall per battery %* in use and where it comes from (set by you, learned, or from the capacity), the learned value and how many sessions it is based on. You can set your own value, and switch back to the learned one.
 
 ### Fuel
 

@@ -43,6 +43,20 @@ def _year(item: dict, key: str) -> Any:
     return item["rolling_12m"].get(key)
 
 
+def _trip_attributes(trip: dict | None) -> dict:
+    trip = trip or {}
+    costing = trip.get("costing") or {}
+    return {
+        "start_ts": trip.get("start_ts"),
+        "end_ts": trip.get("end_ts"),
+        "from": trip.get("start_address") or trip.get("start_zone"),
+        "to": trip.get("end_address") or trip.get("end_zone"),
+        "energy_kwh": costing.get("energy_kwh"),
+        "fuel_l": costing.get("fuel_l"),
+        "cost": costing.get("cost"),
+    }
+
+
 VEHICLE_SENSORS: tuple[VehicleSensorDescription, ...] = (
     VehicleSensorDescription(
         key="cost_this_month", translation_key="cost_this_month", device_class=SensorDeviceClass.MONETARY,
@@ -81,6 +95,18 @@ VEHICLE_SENSORS: tuple[VehicleSensorDescription, ...] = (
         key="fuel_consumption", translation_key="fuel_consumption", native_unit_of_measurement="L/100 km",
         state_class=SensorStateClass.MEASUREMENT, suggested_display_precision=1,
         value_fn=lambda i: _year(i, "fuel_l_per_100km"),
+    ),
+    VehicleSensorDescription(
+        key="electric_consumption", translation_key="electric_consumption", native_unit_of_measurement="kWh/100 km",
+        state_class=SensorStateClass.MEASUREMENT, suggested_display_precision=1,
+        value_fn=lambda i: _year(i, "kwh_per_100km"),
+        attrs_fn=lambda i: {"electric_share": _year(i, "electric_share")},
+    ),
+    VehicleSensorDescription(
+        key="last_trip", translation_key="last_trip", device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.KILOMETERS, suggested_display_precision=1,
+        value_fn=lambda i: (i.get("last_trip") or {}).get("distance_km"),
+        attrs_fn=lambda i: _trip_attributes(i.get("last_trip")),
     ),
     VehicleSensorDescription(
         key="last_charge", translation_key="last_charge", device_class=SensorDeviceClass.ENERGY,

@@ -14,16 +14,18 @@ from sqlalchemy.orm import Session
 
 from .charging import update_cost
 from .db import utcnow
-from .models import ChargeSession, IngestEvent, OdometerReading, Refuel, Vehicle
+from .models import ChargeSession, IdleRecord, IngestEvent, OdometerReading, Refuel, Trip, Vehicle
 from .review import add_item
 from .schemas import (
     ChargePayload,
     ExternalChargePayload,
+    IdlePayload,
     IngestEventIn,
     OdometerPayload,
     RefuelPayload,
     SettingsModel,
     SocUpdatePayload,
+    TripPayload,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -230,7 +232,77 @@ def _odometer(db: Session, event: IngestEventIn, _settings: SettingsModel) -> st
     return reading.id
 
 
+def _pct_drop(start: float | None, end: float | None) -> float | None:
+    return None if start is None or end is None else round(start - end, 2)
+
+
+def _litres_used(start: float | None, end: float | None) -> float:
+    """Provisional litres: a rise or a negative noise value counts as 0 (see docs/costs.md)."""
+    return 0.0 if start is None or end is None else round(max(start - end, 0.0), 2)
+
+
+def _trip(db: Session, event: IngestEventIn, _settings: SettingsModel) -> str:
+    data = _payload(TripPayload, event)
+    vehicle = _vehicle(db, event)
+    trip = Trip(
+        vehicle_id=vehicle.id,
+        start_ts=data.start_ts,
+        start_ts_estimated=data.start_ts_estimated,
+        end_ts=data.end_ts,
+        start_lat=data.start.lat,
+        start_lon=data.start.lon,
+        start_address=data.start.address,
+        start_zone=data.start.zone,
+        end_lat=data.end.lat,
+        end_lon=data.end.lon,
+        end_address=data.end.address,
+        end_zone=data.end.zone,
+        kind=data.kind,
+        odometer_start=data.odometer_start,
+        odometer_end=data.odometer_end,
+        distance_km=round(data.distance_km, 2),
+        distance_source=data.distance_source,
+        battery_start_pct=data.battery_start_pct,
+        battery_end_pct=data.battery_end_pct,
+        battery_used_pct=_pct_drop(data.battery_start_pct, data.battery_end_pct),
+        charged_kwh=round(data.charged_kwh, 3),
+        fuel_start_l=data.fuel_start_l,
+        fuel_end_l=data.fuel_end_l,
+        fuel_l=_litres_used(data.fuel_start_l, data.fuel_end_l),
+        source="collector",
+        locked_fields=[],
+        auto_values={"flags": data.flags} if data.flags else {},
+        origin={},
+    )
+    db.add(trip)
+    db.flush()
+    return trip.id
+
+
+def _idle(db: Session, event: IngestEventIn, _settings: SettingsModel) -> str:
+    data = _payload(IdlePayload, event)
+    vehicle = _vehicle(db, event)
+    idle = IdleRecord(
+        vehicle_id=vehicle.id,
+        start_ts=data.start_ts,
+        end_ts=data.end_ts,
+        zone=data.zone,
+        battery_start_pct=data.battery_start_pct,
+        battery_end_pct=data.battery_end_pct,
+        battery_used_pct=_pct_drop(data.battery_start_pct, data.battery_end_pct),
+        fuel_l=_litres_used(data.fuel_start_l, data.fuel_end_l),
+        source="collector",
+        locked_fields=[],
+        auto_values={},
+    )
+    db.add(idle)
+    db.flush()
+    return idle.id
+
+
 HANDLERS: dict[str, Callable[[Session, IngestEventIn, SettingsModel], str | None]] = {
+    "trip.recorded": _trip,
+    "idle.recorded": _idle,
     "charge.started": _charge,
     "charge.updated": _charge,
     "charge.completed": _charge,

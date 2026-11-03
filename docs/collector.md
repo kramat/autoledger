@@ -2,7 +2,7 @@
 
 Domain: `autoledger`. Installed through HACS. It turns the states of your car and charger entities into records and delivers them to the AutoLedger add-on.
 
-> **Built in M2:** setup (discovery + manual), vehicle and charger subentries, snapshots, home charge sessions, public charge and refuel detection, odometer readings, the outbox, the sensors, the `add_refuel` / `add_charge` / `add_odometer` / `resync` services and the events. Marked *(M3)* or *(M5)* below: trips, live trip mode, snapshot boost, idle consumption, backfill and the remaining services.
+> **Built in M2 and M3:** setup (discovery + manual), vehicle and charger subentries, snapshots, home charge sessions, public charge and refuel detection, odometer readings, trips (snapshot mode), idle consumption, backfill, the outbox, the sensors, the services and the events. Marked *(M5)* below: live trip mode, snapshot boost and the remaining services.
 
 ## Setup
 
@@ -32,7 +32,7 @@ Every setting can be changed later through the subentry's **Reconfigure** option
 | `charging_state` | no | sensor or binary_sensor | Telling charging apart from noise, public charge confirmation |
 | `plug_state` | no | sensor or binary_sensor (connected/disconnected) | Charge-session vehicle attribution |
 | `car_timestamp` | no | sensor containing the car's own report time | Exact event times for cloud-based cars |
-| `fuel_flap`, `running`, `fuel_price` | *(M3/M5)* | | Refuel confirmation, live trip mode, refuel price suggestion. Until then the add-on suggests the price of your last refuel, or the default from Settings. |
+| `fuel_flap`, `running`, `fuel_price` | *(M5)* | | Refuel confirmation, live trip mode, refuel price suggestion. Until then the add-on suggests the price of your last refuel, or the default from Settings. |
 
 The vehicle's type, tank size, usable battery and wall kWh per % come from the add-on. The Collector takes them over again on every summary poll (5 min), so a change on the add-on's Vehicles page needs no reconfigure or reload. The latest values are kept in the Collector's store and used after a restart, even when the add-on is not reachable yet.
 
@@ -63,7 +63,7 @@ Snapshot
 - A snapshot that changed nothing relevant is dropped.
 - The last **committed** snapshot is persisted in the Store. Detectors always compare *new snapshot* against *last committed snapshot*. This delta-based design is why restarts and sparse data are handled correctly.
 
-## Trip detection *(M3)*
+## Trip detection
 
 ### Snapshot mode (default, and correct for cloud cars like the Lynk)
 
@@ -73,16 +73,16 @@ A **trip** is created when two consecutive snapshots differ by at least `min_tri
 
 | Field | How |
 |---|---|
-| `start_ts` | The time the car was last seen parked (the previous snapshot). Flagged `estimated`, because the car may have stood still for a while after that. When `car_timestamp` and average-speed data exist, it is refined to `end_ts − distance / average speed`. |
+| `start_ts` | The time the car was last seen parked (the previous snapshot). Flagged `estimated`, because the car may have stood still for a while after that. *(M5: refine it with an average speed.)* |
 | `end_ts` | The new snapshot's `ts` |
 | `start_*` / `end_*` place | lat/lon, address and zone of the previous and new snapshot |
-| `distance_km` | `Δtrip_meter` when it is plausible (0 ≤ Δtrip ≤ Δodometer + 1 and no reset); otherwise `Δodometer` |
-| `energy_kwh` | `−Δbattery_pct × kwh_per_pct` (see [costs.md](costs.md#kwh-per-percent)). It can be negative, meaning the engine charged the battery on a PHEV. |
-| `fuel_l` | `−Δfuel_l`. It can be provisional, because fuel level sensors are noisy (see [costs.md](costs.md#fuel-reconciliation)). |
+| `distance_km` | `Δtrip_meter` when it agrees with the odometer (Δodometer − 1 ≤ Δtrip ≤ Δodometer + 1, so no reset and no lagging trip meter); otherwise `Δodometer` |
+| `battery_*`, `charged_kwh` | Battery % at both ends, plus the kWh charged within the same window: the home charger's counter delta, or the estimate of a detected public charge. The **add-on** turns this into energy: `(start − end) × kwh_per_pct + charged_kwh` (see [costs.md](costs.md#kwh-per-percent)). A negative result means the engine charged the battery on a PHEV. |
+| `fuel_*` | Tank level at both ends. The add-on takes `max(start − end, 0)` as provisional litres, because fuel level sensors are noisy (see [costs.md](costs.md#fuel-reconciliation)). |
 | `kind` | `round_trip` when start and end are within 150 m or in the same zone, otherwise `one_way` |
-| `segments` | 1. The GUI shows *"may contain several stops"* when the duration and distance suggest it. |
+| `flags` | `refuel_in_window`, `charge_in_window` |
 
-If the same segment *also* shows the battery going up or the fuel going up, the trip is still created. The extra energy becomes a separate external-charge or refuel event, flagged for review (see below).
+If the same segment *also* shows the battery going up or the fuel going up, the trip is still created. The extra energy becomes a separate external-charge or refuel event, flagged for review (see below). One report can cover several drives; split such a trip on the Trips page.
 
 ### Live mode *(M5)* (optional, for cars with a live `running` sensor)
 
@@ -134,19 +134,22 @@ This applies to PHEV and ICE. Between two snapshots, a refuel is assumed when `�
 - The place is the end point of the segment, the address being the fuel station's.
 - The collector fires `autoledger_refuel_detected` so an automation can ask you for the receipt amount right away (example below).
 
-## Idle consumption *(M3)*
+## Idle consumption
 
-When the battery or fuel drops between snapshots **without** distance (pre-climate, standby, cabin heating while parked), an `idle` record is emitted, as long as the drop exceeds the noise threshold (default 1 % or 0.5 L). It is costed like a trip but reported separately as *"climate & standby"*, so the €/km of real driving is not distorted.
+When the battery or fuel drops between snapshots **without** distance (pre-climate, standby, cabin heating while parked), an `idle` record is emitted, as long as the drop exceeds the noise threshold (default 1 % or 0.5 L) and the home charger delivered nothing in that window. It is costed like a trip but reported separately as *"climate & standby"*, so the €/km of real driving is not distorted.
 
 ## Odometer readings
 
-Every snapshot in which the odometer changed sends an `odometer.reading`. This gives the add-on a continuous odometer history, so km per month are known for a connected car even before trips exist (M3), and also for distance the trip detector would miss (for example while HA was down for days).
+Every snapshot in which the odometer changed sends an `odometer.reading`. This gives the add-on a continuous odometer history, so km per month are known for a connected car before its first trip, and also for distance the trip detector would miss (for example while HA was down for days).
 
-## Backfill *(M3)*
+## Backfill
 
-Service `autoledger.backfill` takes a `vehicle` and a `start` date. It reads the recorder history of the mapped entities from that date and replays it through the detectors. Use it right after installing, to recover the last days (the HA recorder keeps about 10 days by default), or after a long outage.
+Service `autoledger.backfill` takes a `vehicle` and a `start` date. It reads the recorder history of the mapped entities from that date **up to the moment live tracking began** and replays it through the detectors, one snapshot per burst of changes as in live mode. Use it right after installing, to recover the last days (the HA recorder keeps about 10 days by default).
 
-Backfilled events get deterministic UUIDs derived from entity and timestamp, so running backfill twice creates no duplicates.
+- Backfilled events get UUIDs derived from vehicle, type and time, so running backfill twice creates nothing twice.
+- It stops where live tracking began, so nothing is detected twice. Gaps *after* that (HA down for days) are covered by the odometer readings; their km count, but no trips are made for them.
+- Trips, idle records, refuels, public charges and odometer readings are backfilled. Home charge sessions are not: add those by hand on the Charging page if needed.
+- The response tells how many snapshots and events it found.
 
 ## Delivery (outbox)
 
@@ -174,7 +177,9 @@ One HA **device** per add-on vehicle (manual vehicles such as the VW Up included
 | `sensor.autoledger_items_to_review` | count | Number of items in the review inbox |
 | `binary_sensor.<charger>_charging` | — | A session is running (collector state, live) |
 | `sensor.<charger>_session_energy` / `_session_cost` | kWh / EUR | Live values of the open session |
-| *(M3/M4)* `last_trip`, `consumption_electric`, `next_maintenance` | | Arrive with trips and maintenance schedules |
+| `sensor.<car>_last_trip` | km | Attributes: start, end, from, to, kWh, L, cost |
+| `sensor.<car>_electric_consumption` | kWh/100 km | Rolling 12 months, trips only. Attribute `electric_share` (PHEV). |
+| *(M4)* `next_maintenance` | | Arrives with maintenance schedules |
 
 ## Services
 
@@ -185,8 +190,9 @@ The `vehicle` field is a device selector filtered to AutoLedger vehicles, so the
 | `autoledger.add_refuel` | `vehicle`, `litres`, `total_cost` **or** `price_per_l`, `odometer`?, `full_tank` (default true), `station`?, `timestamp`? |
 | `autoledger.add_charge` | `vehicle`, `energy_kwh`, `total_cost` **or** `price_per_kwh`, `location`?, `timestamp`? |
 | `autoledger.add_odometer` | `vehicle`, `odometer`, `timestamp`? |
+| `autoledger.backfill` | `vehicle`, `start` (date). Returns `{from, until, snapshots, events}`. See [Backfill](#backfill). |
 | `autoledger.resync` | Resends the outbox and refreshes the summary |
-| *(later)* `add_maintenance`, `add_expense`, `end_trip`, `backfill` | |
+| *(later)* `add_maintenance`, `add_expense`, `end_trip` | |
 
 The `add_*` services return the new record's `id` as a service response.
 
@@ -197,7 +203,7 @@ The `add_*` services return the new record's `id` as a service response.
 | `autoledger_charge_completed` | `vehicle_id`, `record_id`, `energy_kwh`, `cost` |
 | `autoledger_refuel_detected` | `vehicle_id`, `record_id`, `litres` |
 | `autoledger_review_needed` | `vehicle_id`, `record_id`, `reason` (`refuel_price`, `public_charge_price`), `energy_kwh` for charges |
-| *(M3)* `autoledger_trip_recorded` | |
+| `autoledger_trip_recorded` | `vehicle_id`, `record_id`, `distance_km`, `start_ts`, `end_ts`, `kind` |
 
 Events fire once the add-on has stored the record, so `record_id` is always valid.
 
@@ -223,7 +229,7 @@ actions:
 | `trip_end_delay` *(M5)* | 3 min | Live mode only |
 | `external_charge_min_pct` | 3 % | Threshold for detecting a public charge |
 | `refuel_min_l` | 3 L | Threshold for detecting a refuel |
-| `idle_threshold` *(M3)* | 1 % / 0.5 L | Threshold for idle-consumption records |
+| `idle_min_pct` / `idle_min_l` | 1 % / 0.5 L | Thresholds for idle-consumption records |
 | `boost_service`, `boost_max_per_day` *(M5)* | — / 12 | Optional "refresh now" service |
 
 Charger subentry options: `start_w` (default 500), `stop_w` (default 100), `min_session_kwh` (default 0.2), and `fixed_price`, which is used when no price entity is mapped or it is unavailable. When neither is available, the add-on's fallback electricity price is used. The price source is stored with every price sample.

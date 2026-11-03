@@ -20,6 +20,7 @@ const ready = ref(false)
 
 const tabs = [
   { to: '/', label: 'Overview' },
+  { to: '/trips', label: 'Trips' },
   { to: '/fuel', label: 'Fuel' },
   { to: '/charging', label: 'Charging' },
   { to: '/maintenance', label: 'Maintenance' },

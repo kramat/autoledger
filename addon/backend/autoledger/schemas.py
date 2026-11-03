@@ -235,6 +235,104 @@ class ChargeOut(ChargeIn, RecordOut, AutoOut):
         return self.cost / self.energy_kwh if self.energy_kwh else None
 
 
+# --- Trips and idle records -----------------------------------------------
+
+TripKind = Literal["one_way", "round_trip"]
+
+
+class TripIn(InModel):
+    vehicle_id: str
+    start_ts: AwareDatetime
+    start_ts_estimated: bool = False
+    end_ts: AwareDatetime
+    start_address: str | None = Field(None, max_length=200)
+    start_zone: str | None = Field(None, max_length=80)
+    end_address: str | None = Field(None, max_length=200)
+    end_zone: str | None = Field(None, max_length=80)
+    kind: TripKind = "one_way"
+    distance_km: float = Field(ge=0)
+    battery_start_pct: float | None = Field(None, ge=0, le=100)
+    battery_end_pct: float | None = Field(None, ge=0, le=100)
+    battery_used_pct: float | None = Field(None, ge=-100, le=200)
+    energy_kwh: float | None = Field(None, ge=-50, le=500)
+    fuel_l: float = Field(0, ge=0)
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "TripIn":
+        if self.end_ts < self.start_ts:
+            raise ValueError("The end must be after the start")
+        if self.battery_used_pct is None and None not in (self.battery_start_pct, self.battery_end_pct):
+            self.battery_used_pct = round(self.battery_start_pct - self.battery_end_pct, 2)
+        return self
+
+
+class TripCostOut(BaseModel):
+    energy_kwh: float
+    kwh_per_pct: float | None = None
+    factor_mode: str | None = None
+    kwh_price: float | None = None
+    electricity_cost: float
+    fuel_l_provisional: float
+    fuel_l: float
+    fuel_reconciled: bool
+    l_price: float | None = None
+    fuel_cost: float
+    cost: float
+    notes: list[str] = []
+
+
+class TripOut(TripIn, RecordOut, AutoOut):
+    model_config = ConfigDict(from_attributes=True)
+
+    start_lat: float | None = None
+    start_lon: float | None = None
+    end_lat: float | None = None
+    end_lon: float | None = None
+    odometer_start: float | None = None
+    odometer_end: float | None = None
+    distance_source: str
+    charged_kwh: float = 0
+    fuel_start_l: float | None = None
+    fuel_end_l: float | None = None
+    origin: dict = {}
+    # Filled in on responses: how the ledger costed this trip.
+    costing: TripCostOut | None = None
+
+
+class IdleIn(InModel):
+    vehicle_id: str
+    start_ts: AwareDatetime
+    end_ts: AwareDatetime
+    zone: str | None = Field(None, max_length=80)
+    battery_start_pct: float | None = Field(None, ge=0, le=100)
+    battery_end_pct: float | None = Field(None, ge=0, le=100)
+    battery_used_pct: float | None = Field(None, ge=-100, le=200)
+    energy_kwh: float | None = Field(None, ge=-50, le=500)
+    fuel_l: float = Field(0, ge=0)
+    note: str | None = None
+
+
+class IdleOut(IdleIn, RecordOut, AutoOut):
+    model_config = ConfigDict(from_attributes=True)
+
+    costing: TripCostOut | None = None
+
+
+class SplitIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    at_km: float = Field(gt=0)
+    at_ts: AwareDatetime
+    address: str | None = Field(None, max_length=200)
+
+
+class MergeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[str] = Field(min_length=2, max_length=2)
+
+
 # --- Review inbox ---------------------------------------------------------
 
 
@@ -331,6 +429,35 @@ class RefuelPayload(BaseModel):
 class OdometerPayload(BaseModel):
     ts: AwareDatetime
     odometer_km: float = Field(ge=0)
+
+
+class TripPayload(BaseModel):
+    start_ts: AwareDatetime
+    start_ts_estimated: bool = True
+    end_ts: AwareDatetime
+    start: Place = Place()
+    end: Place = Place()
+    odometer_start: float | None = Field(None, ge=0)
+    odometer_end: float | None = Field(None, ge=0)
+    distance_km: float = Field(ge=0)
+    distance_source: Literal["trip_meter", "odometer"] = "odometer"
+    battery_start_pct: float | None = Field(None, ge=0, le=100)
+    battery_end_pct: float | None = Field(None, ge=0, le=100)
+    charged_kwh: float = Field(0, ge=0)  # charged within the same window (home counter or public estimate)
+    fuel_start_l: float | None = Field(None, ge=0)
+    fuel_end_l: float | None = Field(None, ge=0)
+    kind: TripKind = "one_way"
+    flags: list[str] = []
+
+
+class IdlePayload(BaseModel):
+    start_ts: AwareDatetime
+    end_ts: AwareDatetime
+    zone: str | None = None
+    battery_start_pct: float | None = Field(None, ge=0, le=100)
+    battery_end_pct: float | None = Field(None, ge=0, le=100)
+    fuel_start_l: float | None = Field(None, ge=0)
+    fuel_end_l: float | None = Field(None, ge=0)
 
 
 # --- Settings -------------------------------------------------------------
