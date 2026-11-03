@@ -22,6 +22,7 @@ const router = createRouter({
     { path: '/review', component: Review },
     { path: '/maintenance', component: Maintenance },
     { path: '/costs', component: Costs },
+    { path: '/reports', component: () => import('./views/Reports.vue') },
     { path: '/vehicles', component: Vehicles },
     { path: '/settings', component: Settings },
   ],

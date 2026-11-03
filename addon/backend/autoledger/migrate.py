@@ -33,7 +33,7 @@ def run_migrations(config: Config, engine: Engine) -> None:
         return
 
     if current is not None:
-        _backup(config.db_path, config.data_dir / "backups" / f"autoledger-{current}.db")
+        backup_database(config.db_path, config.data_dir / "backups" / f"autoledger-{current}.db")
 
     _LOGGER.info("Migrating database from %s to %s", current or "empty", head)
     with engine.begin() as conn:
@@ -41,7 +41,7 @@ def run_migrations(config: Config, engine: Engine) -> None:
         command.upgrade(cfg, "head")
 
 
-def _backup(db_path: Path, target: Path) -> None:
+def backup_database(db_path: Path, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     src = sqlite3.connect(db_path)
     dst = sqlite3.connect(target)

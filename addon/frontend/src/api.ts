@@ -170,7 +170,58 @@ export interface MaintenanceRecord extends RecordBase {
   description: string
   garage: string | null
   cost: number
+  schedule_id: string | null
   note: string | null
+}
+
+export type DueStatus = 'ok' | 'soon' | 'overdue' | 'unknown'
+
+export interface ScheduleDue {
+  schedule_id: string
+  name: string
+  status: DueStatus
+  last_done_date: string | null
+  last_done_km: number | null
+  last_record_id: string | null
+  due_date: string | null
+  due_km: number | null
+  km_left: number | null
+  estimated_date: string | null
+  reason: 'date' | 'km' | null
+  days_left: number | null
+}
+
+export interface MaintenanceSchedule extends RecordBase {
+  vehicle_id: string
+  name: string
+  category: string | null
+  interval_months: number | null
+  interval_km: number | null
+  last_done_date: string | null
+  last_done_km: number | null
+  remind_before_days: number
+  remind_before_km: number
+  active: boolean
+  note: string | null
+  due: ScheduleDue | null
+}
+
+export interface CarService {
+  days_to_service: number | null
+  distance_to_service: number | null
+  reported_at: string
+  odometer_km: number | null
+  due_date: string | null
+  due_km: number | null
+}
+
+export interface VehicleDue {
+  vehicle_id: string
+  vehicle_name: string
+  odometer_km: number | null
+  km_per_day: number | null
+  car_service: CarService | null
+  items: (ScheduleDue & { category: string | null; interval_months: number | null; interval_km: number | null })[]
 }
 
 export interface Expense extends RecordBase {
@@ -245,6 +296,9 @@ export interface VehicleSummary {
   last_trip: Trip | null
   efficiency: Efficiency | null
   trips_since: string | null
+  maintenance: ScheduleDue[]
+  next_maintenance: ScheduleDue | null
+  car_service: CarService | null
   monthly: MonthTotals[]
 }
 
@@ -255,6 +309,94 @@ export interface Summary {
   review_count: number
   vehicles: VehicleSummary[]
   combined: { period: Totals; monthly: MonthTotals[] }
+}
+
+export type ReportGroup = 'month' | 'quarter' | 'year' | 'none'
+
+export interface PerYear {
+  km: number | null
+  total_cost: number | null
+  energy_cost: number | null
+  maintenance_cost: number | null
+  other_cost: number | null
+}
+
+export interface GroupTotals extends Totals {
+  label: string
+  from: string
+  to: string
+}
+
+export interface PeriodReport {
+  from: string
+  to: string
+  group: ReportGroup
+  days: number
+  currency: string
+  vehicles: { vehicle: Vehicle; total: Totals; per_year: PerYear; groups: GroupTotals[] }[]
+  combined: { total: Totals; per_year: PerYear; groups: GroupTotals[] }
+}
+
+export interface TrendMonth {
+  month: string
+  km: number
+  energy_cost_per_km: number | null
+  total_cost_per_km: number | null
+  kwh_per_100km: number | null
+  fuel_l_per_100km: number | null
+  electric_share: number | null
+  total_cost: number
+}
+
+export interface SeasonFigures {
+  months: number
+  km: number
+  trip_km: number
+  kwh_per_100km: number | null
+  fuel_l_per_100km: number | null
+  energy_cost_per_km: number | null
+  electric_share: number | null
+  idle_kwh: number
+}
+
+export interface Trends {
+  currency: string
+  vehicles: {
+    vehicle: Vehicle
+    since: string
+    monthly: TrendMonth[]
+    seasons: Record<'winter' | 'spring' | 'summer' | 'autumn', SeasonFigures>
+  }[]
+}
+
+export type ImportResource = 'refuels' | 'maintenance' | 'odometer-readings' | 'expenses'
+
+export interface ImportRequest {
+  resource: ImportResource
+  vehicle_id: string
+  content: string
+  mapping?: Record<string, string> | null
+  delimiter?: string | null
+  decimal?: '.' | ',' | null
+  date_order?: 'dmy' | 'mdy' | 'ymd' | null
+}
+
+export interface ImportPreview {
+  columns: string[]
+  delimiter: string
+  decimal: '.' | ','
+  date_order: 'dmy' | 'mdy' | 'ymd'
+  mapping: Record<string, string>
+  fields: { name: string; required: boolean }[]
+  rows: { line: number; status: 'ok' | 'error' | 'duplicate'; error: string | null; values: Record<string, unknown> }[]
+  counts: { ok: number; error: number; duplicate: number }
+  total_rows: number
+  created: number
+}
+
+export interface RestoreResult {
+  mode: 'empty' | 'merge'
+  tables: Record<string, { inserted: number; skipped: number }>
 }
 
 export interface Info {
@@ -280,6 +422,7 @@ export type Resource =
   | 'expenses'
   | 'trips'
   | 'idle-records'
+  | 'maintenance-schedules'
 
 export class ApiError extends Error {
   constructor(
@@ -334,5 +477,15 @@ export const api = {
   saveSettings: (settings: Settings) => request<Settings>('PUT', '/settings', settings),
   token: () => request<{ token: string }>('GET', '/settings/token'),
   regenerateToken: () => request<{ token: string }>('POST', '/settings/token/regenerate'),
-  exportUrl: (resource: Resource, params?: Params) => url(`/export/${resource}.csv`, params),
+  exportUrl: (resource: Resource, params?: Params, format: 'csv' | 'xlsx' = 'csv') =>
+    url(`/export/${resource}.${format}`, params),
+  recordsWorkbookUrl: () => url('/export/records.xlsx'),
+  maintenanceDue: (params?: Params) => request<{ vehicles: VehicleDue[] }>('GET', '/maintenance-schedules/due', undefined, params),
+  reportPeriod: (params: Params) => request<PeriodReport>('GET', '/reports/period', undefined, params),
+  reportTrends: (params: Params) => request<Trends>('GET', '/reports/trends', undefined, params),
+  reportExportUrl: (format: 'csv' | 'xlsx', params: Params) => url(`/reports/period.${format}`, params),
+  backupUrl: () => url('/backup'),
+  restoreBackup: (data: unknown, mode: 'empty' | 'merge') => request<RestoreResult>('POST', '/restore', data, { mode }),
+  importCsv: (body: ImportRequest, commit = false) =>
+    request<ImportPreview>('POST', '/import/csv', body, { commit: commit || undefined }),
 }

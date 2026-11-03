@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.autoledger.engine.charging import ChargerParams, ChargeSessionMachine
 from custom_components.autoledger.engine.detect import VehicleParams, detect
+from custom_components.autoledger.engine.maintenance import maintenance_notifications
 from custom_components.autoledger.engine.snapshot import Snapshot, parse_flag, parse_float, sanitize
 
 LYNK = VehicleParams(vehicle_id="lynk", type="PHEV", tank_l=51, battery_usable_kwh=14.1, kwh_per_pct=0.165)
@@ -239,3 +240,29 @@ def test_trip_meter_that_lags_behind_is_not_used():
     new = snap("2026-11-02T09:00:00", odometer_km=63446, trip_meter_km=1382.0)
     trip = detect(prev, new, LYNK)[1].payload
     assert trip["distance_km"] == 7 and trip["distance_source"] == "odometer"
+
+
+# --- Maintenance notifications ----------------------------------------------
+
+
+def _item(status, due_date="2027-01-15", schedule_id="s1"):
+    return {"schedule_id": schedule_id, "name": "Service", "status": status, "due_date": due_date, "due_km": None}
+
+
+def test_maintenance_is_announced_once_per_status():
+    fire, memory = maintenance_notifications([_item("ok")], {})
+    assert fire == [] and memory == {}
+    fire, memory = maintenance_notifications([_item("soon")], memory)
+    assert [f["status"] for f in fire] == ["soon"]
+    fire, memory = maintenance_notifications([_item("soon")], memory)
+    assert fire == []
+    fire, memory = maintenance_notifications([_item("overdue")], memory)
+    assert [f["status"] for f in fire] == ["overdue"]
+
+
+def test_maintenance_done_starts_a_new_cycle():
+    _fire, memory = maintenance_notifications([_item("overdue")], {})
+    _fire, memory = maintenance_notifications([_item("ok", "2028-01-15")], memory)
+    assert memory == {}
+    fire, _memory = maintenance_notifications([_item("soon", "2028-01-15")], memory)
+    assert len(fire) == 1

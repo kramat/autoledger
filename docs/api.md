@@ -52,6 +52,7 @@ Event envelope:
 | `external_charge.detected` | `window_start`, `window_end`, `place`, `battery_start_pct`, `battery_end_pct`, `energy_kwh_estimated`, `car_reported_charging`, `flags: [...]` |
 | `refuel.detected` | `ts`, `place`, `odometer`, `fuel_start_l`, `fuel_end_l`, `litres_estimated`, `suggested_price_per_l`, `price_source` |
 | `idle.recorded` | `start_ts`, `end_ts`, `zone`, `battery_start_pct`?, `battery_end_pct`?, `fuel_start_l`?, `fuel_end_l`? |
+| `service.status` | `days_to_service`, `distance_to_service` (km), `odometer_km`. The car's own service countdown (M4); the latest is kept per vehicle. |
 | `odometer.reading` | `ts`, `odometer_km` |
 
 Ingest rules:
@@ -73,7 +74,7 @@ Each resource supports `GET` (list), `GET /{id}`, `POST`, `PATCH /{id}` and `DEL
 | `/refuels` | M1 | List items include `interval_km` and `l_per_100km` on refuels that close a full-to-full interval |
 | `/odometer-readings` | M1 | |
 | `/maintenance` | M1 | Maintenance records (attachments from M5) |
-| `/maintenance-schedules` | M4 | `GET /maintenance-schedules/due?vehicle_id=` gives next due per schedule |
+| `/maintenance-schedules` | M4 | List items carry `due` (status `ok`/`soon`/`overdue`/`unknown`, `due_date`, `due_km`, `km_left`, `estimated_date`, `reason`, `days_left`). `GET /maintenance-schedules/due?vehicle_id=` gives the active schedules per vehicle, most urgent first, with `odometer_km`, `km_per_day` and the car's own `car_service` countdown. A maintenance record can name its `schedule_id`; without one it counts for the schedules of its category. |
 | `/expenses` | M1 | One-off and recurring |
 | `/attachments` | M5 | `POST` multipart upload. Returns an id to link from records. |
 | `/review-items` | M2 | `GET` lists open items with the current `record`. `POST /review-items/{id}/resolve {action, values}` with action `update` (values are applied like a PATCH), `accept`, `delete` (the record) or `dismiss`. |
@@ -83,8 +84,9 @@ Each resource supports `GET` (list), `GET /{id}`, `POST`, `PATCH /{id}` and `DEL
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/summary?vehicle_id=&from=&to=&months=12` | **M1.** Per vehicle and combined: totals for the period, the last 12 months, a monthly series, latest odometer and last refuel. From M2 also last trip, next maintenance, review count and open sessions. |
-| GET | `/reports/period?vehicle_id=&from=&to=&group=month` | Totals per group and category |
-| GET | `/reports/compare?vehicle_ids=a,b&from=&to=` | Side-by-side metrics |
+| GET | `/reports/period?vehicle_id=&vehicle_ids=&from=&to=&group=month` | **M4.** Per vehicle and combined: `total`, `per_year` (scaled to 365 days) and `groups` (`month`, `quarter`, `year` or `none`), each with the same fields as the summary totals. Defaults to this year up to today. `/reports/period.xlsx` and `.csv` export it. |
+| GET | `/reports/compare?vehicle_ids=a,b&from=&to=` | **M4.** The same without groups |
+| GET | `/reports/trends?vehicle_id=&months=` | **M4.** Per vehicle: a monthly series of €/km and consumption since the first data (or the last `months`), and `seasons` (winter, spring, summer, autumn) summed over all months |
 | GET | `/records/{id}/explain` | Cost breakdown of one record: inputs, prices used, cost basis at that moment |
 | POST | `/ledger/recalculate?vehicle_id=&from=` | Forces a recalculation. This is normally automatic. |
 
@@ -92,7 +94,8 @@ Each resource supports `GET` (list), `GET /{id}`, `POST`, `PATCH /{id}` and `DEL
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/export/{resource}.csv` | **M1.** Same filters as the list endpoint. `.xlsx` follows in M4. |
-| GET | `/backup` | Full JSON dump, including attachments as base64 when `?attachments=true` |
-| POST | `/restore` | Restores a backup into an **empty** database, or with `?mode=merge` (matched by id) |
-| POST | `/import/csv` | Multipart file plus a column mapping. Returns a preview first, and commits with `?commit=true`. |
+| GET | `/export/{resource}.csv` / `.xlsx` | Same filters as the list endpoint |
+| GET | `/export/records.xlsx` | **M4.** Every record type in one workbook, a sheet each |
+| GET | `/backup` | **M4.** Every table as JSON (`format`, `format_version`, `schema_revision`, `tables`), deleted records included, the API token not. Attachments follow with M5. |
+| POST | `/restore?mode=empty` or `merge` | **M4.** The backup as the JSON body. `empty` (default) needs a database without vehicles; `merge` adds the rows whose id is missing and keeps the rest. A backup from a newer version is refused. The database is copied to `/data/backups/autoledger-before-restore-<time>.db` first. Returns `{inserted, skipped}` per table. |
+| POST | `/import/csv` | **M4.** JSON body `{resource, vehicle_id, content, mapping?, delimiter?, decimal?, date_order?}` for `refuels`, `maintenance`, `odometer-readings` or `expenses`. Without a mapping the columns are guessed (English and Dutch headers). Returns a preview (`mapping`, `decimal`, `date_order`, the first 50 `rows` with status `ok`/`error`/`duplicate`, `counts`); `?commit=true` imports the `ok` rows with `source: import`. |

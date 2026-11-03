@@ -297,6 +297,17 @@ def distance_between(points: list[OdoPoint], start: datetime, end: datetime) -> 
     return total
 
 
+def odometer_at(points: list[OdoPoint], ts: datetime) -> float | None:
+    """Odometer at ``ts``, interpolated; None before the first or after the last point."""
+    if not points or ts < points[0].ts or ts > points[-1].ts:
+        return None
+    for a, b in pairwise(points):
+        if a.ts <= ts <= b.ts:
+            span = (b.ts - a.ts).total_seconds()
+            return a.km if span == 0 else a.km + (b.km - a.km) * (ts - a.ts).total_seconds() / span
+    return points[-1].km
+
+
 # --- Fuel -----------------------------------------------------------------
 
 
@@ -757,6 +768,20 @@ class VehicleBook:
         totals.trip_cost += cost.cost
         if trip.distance_km > 0 and cost.fuel_l / trip.distance_km < ELECTRIC_L_PER_KM:
             totals.electric_km += trip.distance_km
+
+    def km_per_day(self, days: int = 90) -> float | None:
+        """Average driving rate over the last ``days`` before the latest odometer value.
+
+        Falls back to the whole history when that window covers less than two weeks.
+        """
+        if len(self.points) < 2:
+            return None
+        last = self.points[-1].ts
+        start = max(last - timedelta(days=days), self.points[0].ts)
+        if (last - start).days < 14:
+            start = self.points[0].ts
+        span = (last - start).total_seconds() / 86400
+        return distance_between(self.points, start, last) / span if span >= 1 else None
 
     @property
     def last_trip(self) -> TripData | None:

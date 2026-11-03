@@ -25,6 +25,7 @@ const tabs = [
   { to: '/charging', label: 'Charging' },
   { to: '/maintenance', label: 'Maintenance' },
   { to: '/costs', label: 'Costs' },
+  { to: '/reports', label: 'Reports' },
   { to: '/review', label: 'Review' },
   { to: '/vehicles', label: 'Vehicles' },
   { to: '/settings', label: 'Settings' },

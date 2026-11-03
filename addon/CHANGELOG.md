@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- Maintenance schedules: *every 12 months or 15 000 km*, *APK yearly*. Logged maintenance moves a schedule
+  forward by itself (linked, or by category), and the next due date is estimated from how much you drive.
+  Due soon and overdue show on the Maintenance page, the overview and in Home Assistant (Collector 0.4.0).
+  The car's own service countdown is shown next to them when the Collector maps it.
+- Reports: a year (or any period) per month, quarter or year, cars side by side with figures per year,
+  trends of €/km and consumption per month, and consumption per season. Export as XLSX or CSV.
+- Export of all records as one Excel workbook, or per type as XLSX.
+- Full JSON backup and restore (into an empty add-on, or adding only what is missing).
+- CSV import of refuels, maintenance, odometer readings and other costs, with a preview, column mapping,
+  decimal commas and day-first dates. Rows that are already there are skipped.
+
 ## 0.3.1
 
 - Fuel gauge noise is smoothed: between refuels the tank level can only go down, so a dip that comes

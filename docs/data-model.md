@@ -48,10 +48,10 @@ Tables built in **M1**: `vehicles`, `refuels`, `odometer_readings`, `maintenance
 `vehicle_id`, `ts`, `odometer_km`. Unique on (`vehicle_id`, `ts`).
 
 ### `maintenance_records`
-`vehicle_id`, `date`, `odometer_km`, `category`, `description`, `garage`, `cost`, `schedule_id` (NULL), `attachments` (JSON list of ids)
+`vehicle_id`, `date`, `odometer_km`, `category`, `description`, `garage`, `cost`, `schedule_id` (NULL: counts for the schedules of its category), `note`. *(attachments: M5)*
 
 ### `maintenance_schedules`
-`vehicle_id`, `name`, `category`, `interval_months`, `interval_km`, `last_done_date`, `last_done_km`, `remind_before_days`, `remind_before_km`, `active`
+`vehicle_id`, `name`, `category`, `interval_months`, `interval_km`, `last_done_date`, `last_done_km`, `remind_before_days` (30), `remind_before_km` (1000), `active`, `note`. Built in M4 (migration 0004). `last_done_*` is the starting point you enter; newer maintenance records of the schedule move it forward when it is read, so nothing derived is stored. The car's own service countdown (`service.status`) is kept in `settings` under `car_service:<vehicle_id>`.
 
 ### `expenses`
 `vehicle_id`, `category`, `amount`, `date` (one-off) **or** `recurrence` (`monthly`/`quarterly`/`yearly`) with `start_date` and `end_date`, `note`, `attachment_id`

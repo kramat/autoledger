@@ -14,6 +14,7 @@ from ..db import get_db
 from ..ledger import PeriodTotals, month_ranges
 from ..review import open_count
 from ..settings_store import get_settings
+from .schedules import vehicle_due
 
 router = APIRouter(tags=["summary"])
 
@@ -74,6 +75,7 @@ def summary(
             .order_by(models.Refuel.ts.desc())
             .limit(1)
         ).first()
+        maintenance = vehicle_due(db, vehicle, book)
         result_vehicles.append(
             {
                 "vehicle": schemas.VehicleOut.model_validate(vehicle),
@@ -88,6 +90,9 @@ def summary(
                 "last_trip": _last_trip(db, book),
                 "efficiency": _efficiency(book),
                 "trips_since": book.trips_since,
+                "maintenance": maintenance["items"],
+                "next_maintenance": next((m for m in maintenance["items"] if m["status"] != "unknown"), None),
+                "car_service": maintenance["car_service"],
                 "monthly": _monthly(ranges, monthly),
             }
         )

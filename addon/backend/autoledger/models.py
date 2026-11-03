@@ -90,6 +90,31 @@ class MaintenanceRecord(RecordMixin, Base):
     description: Mapped[str] = mapped_column(String(200))
     garage: Mapped[str | None] = mapped_column(String(120))
     cost: Mapped[float] = mapped_column(Float, default=0)
+    # The schedule this entry fulfils. None: it fulfils schedules of the same category.
+    schedule_id: Mapped[str | None] = mapped_column(ForeignKey("maintenance_schedules.id"), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class MaintenanceSchedule(RecordMixin, Base):
+    """A recurring maintenance item: every n months and/or every n km.
+
+    ``last_done_*`` is the starting point the user entered. Maintenance records of
+    the schedule (linked, or of the same category) move it forward when they are
+    newer, so it never has to be updated by hand (docs/addon.md#maintenance).
+    """
+
+    __tablename__ = "maintenance_schedules"
+
+    vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"))
+    name: Mapped[str] = mapped_column(String(80))
+    category: Mapped[str | None] = mapped_column(String(20))
+    interval_months: Mapped[int | None] = mapped_column(Integer)
+    interval_km: Mapped[float | None] = mapped_column(Float)
+    last_done_date: Mapped[dt.date | None] = mapped_column(Date)
+    last_done_km: Mapped[float | None] = mapped_column(Float)
+    remind_before_days: Mapped[int] = mapped_column(Integer, default=30)
+    remind_before_km: Mapped[float] = mapped_column(Float, default=1000)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
     note: Mapped[str | None] = mapped_column(Text)
 
 

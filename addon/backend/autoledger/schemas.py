@@ -147,11 +147,51 @@ class MaintenanceIn(InModel):
     description: str = Field(min_length=1, max_length=200)
     garage: str | None = Field(None, max_length=120)
     cost: float = Field(0, ge=0)
+    schedule_id: str | None = None
     note: str | None = None
 
 
 class MaintenanceOut(MaintenanceIn, RecordOut):
     model_config = ConfigDict(from_attributes=True)
+
+
+class ScheduleIn(InModel):
+    vehicle_id: str
+    name: str = Field(min_length=1, max_length=80)
+    category: MaintenanceCategory | None = None
+    interval_months: int | None = Field(None, ge=1, le=240)
+    interval_km: float | None = Field(None, gt=0)
+    last_done_date: dt.date | None = None
+    last_done_km: float | None = Field(None, ge=0)
+    remind_before_days: int = Field(30, ge=0, le=365)
+    remind_before_km: float = Field(1000, ge=0)
+    active: bool = True
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _check_interval(self) -> "ScheduleIn":
+        if self.interval_months is None and self.interval_km is None:
+            raise ValueError("Give an interval in months, in km, or both")
+        return self
+
+
+class ScheduleOut(ScheduleIn, RecordOut):
+    model_config = ConfigDict(from_attributes=True)
+
+    # Filled in on list responses (docs/api.md#resources).
+    due: dict | None = None
+
+
+class CarServiceOut(BaseModel):
+    """The car's own service countdown, as last reported by the collector."""
+
+    days_to_service: float | None = None
+    distance_to_service: float | None = None
+    reported_at: dt.datetime
+    odometer_km: float | None = None
+    # The countdown turned into a date and an odometer value.
+    due_date: dt.date | None = None
+    due_km: float | None = None
 
 
 # --- Expenses -------------------------------------------------------------
@@ -449,6 +489,12 @@ class TripPayload(BaseModel):
     fuel_end_l: float | None = Field(None, ge=0)
     kind: TripKind = "one_way"
     flags: list[str] = []
+
+
+class ServiceStatusPayload(BaseModel):
+    days_to_service: float | None = None
+    distance_to_service: float | None = Field(None, description="km")
+    odometer_km: float | None = None
 
 
 class IdlePayload(BaseModel):

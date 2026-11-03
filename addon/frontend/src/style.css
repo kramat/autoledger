@@ -13,6 +13,9 @@
   --accent-text: #ffffff;
   --danger: #c4302f;
   --good: #006300;
+  --warn: #8a5a00;
+  --warn-bg: #fdf1d6;
+  --danger-bg: #fbe4e2;
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
@@ -36,6 +39,9 @@
     --accent: #3987e5;
     --danger: #e66767;
     --good: #0ca30c;
+    --warn: #e5b04a;
+    --warn-bg: #3a2c10;
+    --danger-bg: #3d1a19;
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -362,6 +368,21 @@ td.row-actions {
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--text-2);
+}
+
+/* Maintenance status: always an icon and a word, never color alone. */
+.badge.soon {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.badge.overdue {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge.ok {
+  color: var(--good);
 }
 
 .empty {

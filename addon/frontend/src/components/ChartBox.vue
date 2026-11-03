@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
-import { BarChart } from 'echarts/charts'
+import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 
-echarts.use([BarChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
+echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, SVGRenderer])
 
 const props = defineProps<{ option: echarts.EChartsCoreOption; height?: number; label: string }>()
 const el = ref<HTMLDivElement>()

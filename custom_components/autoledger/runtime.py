@@ -46,12 +46,14 @@ from .const import (
     CONF_VEHICLE_ID,
     DOMAIN,
     EVENT_CHARGE_COMPLETED,
+    EVENT_MAINTENANCE_DUE,
     EVENT_REFUEL_DETECTED,
     EVENT_REVIEW_NEEDED,
     EVENT_TRIP_RECORDED,
     ROLE_ADDRESS,
     ROLE_BATTERY,
     ROLE_CAR_TIMESTAMP,
+    ROLE_DISTANCE_TO_SERVICE,
     ROLE_CHARGING,
     ROLE_FUEL,
     ROLE_LATITUDE,
@@ -66,11 +68,13 @@ from .const import (
     SUBENTRY_VEHICLE,
     TICK_INTERVAL,
     VEHICLE_INFO_KEYS,
+    SERVICE_ROLES,
     VEHICLE_ROLES,
     VERSION,
 )
 from .engine.charging import ChargerParams, ChargeSessionMachine, SessionEvent
 from .engine.detect import VehicleParams, detect
+from .engine.maintenance import maintenance_notifications
 from .engine.snapshot import Snapshot, parse_flag, parse_float, parse_text, sanitize
 from .outbox import Outbox
 
@@ -90,13 +94,15 @@ class Runtime:
         self.entry = entry
         self.client = client
         self.store: Store[dict] = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
-        self.data: dict[str, Any] = {"outbox": [], "vehicles": {}, "chargers": {}}
+        self.data: dict[str, Any] = {"outbox": [], "vehicles": {}, "chargers": {}, "notified": {}}
         self.decisions: deque[str] = deque(maxlen=50)
         self.fallback_price = 0.25
         self.vehicles: dict[str, VehicleTracker] = {}
         self.chargers: dict[str, ChargerTracker] = {}
         self.outbox: Outbox | None = None
         self.coordinator = None  # set by __init__
+        # The add-on knows maintenance schedules and the car's service countdown (0.4.0 and later).
+        self.addon_maintenance = False
         self._unsubs: list[Callable[[], None]] = []
 
     # --- lifecycle --------------------------------------------------------
@@ -105,6 +111,7 @@ class Runtime:
         stored = await self.store.async_load()
         if stored:
             self.data.update(stored)
+            self.data.setdefault("notified", {})
         self.outbox = Outbox(self.hass, self.client, self.data["outbox"], self.save_now, self._delivered)
 
         try:
@@ -201,10 +208,35 @@ class Runtime:
     @callback
     def apply_summary(self) -> None:
         """Keep detection in step with vehicle changes made in the add-on (every summary poll)."""
-        items = {item["vehicle"]["id"]: item["vehicle"] for item in (self.coordinator.data or {}).get("vehicles", [])}
+        summary_items = (self.coordinator.data or {}).get("vehicles", [])
+        items = {item["vehicle"]["id"]: item["vehicle"] for item in summary_items}
         for tracker in self.vehicles.values():
             if (vehicle := items.get(tracker.params.vehicle_id)) is not None:
                 tracker.apply_vehicle(vehicle)
+        self.addon_maintenance = any("next_maintenance" in item for item in summary_items)
+        if self.coordinator.last_update_success and self.addon_maintenance:
+            self._announce_maintenance(summary_items)
+
+    @callback
+    def _announce_maintenance(self, summary_items: list[dict]) -> None:
+        """Fire autoledger_maintenance_due once per schedule when it becomes soon, and again when overdue."""
+        notified: dict = self.data["notified"]
+        changed = False
+        for item in summary_items:
+            vehicle = item["vehicle"]
+            fire, memory = maintenance_notifications(item.get("maintenance") or [], notified.get(vehicle["id"], {}))
+            for due in fire:
+                self.hass.bus.async_fire(EVENT_MAINTENANCE_DUE, {
+                    "vehicle_id": vehicle["id"], "vehicle_name": vehicle["name"],
+                    **{k: due.get(k) for k in ("schedule_id", "name", "status", "due_date", "due_km", "km_left",
+                                               "estimated_date", "days_left", "reason")},
+                })
+                self.log(f"{vehicle['name']}: maintenance {due['name']} is {due['status']}")
+            if memory != notified.get(vehicle["id"], {}):
+                notified[vehicle["id"]] = memory
+                changed = True
+        if changed:
+            self.save_soon()
 
     @callback
     def _tick(self, now: datetime) -> None:
@@ -242,6 +274,7 @@ class VehicleTracker:
         )
         self.fuel_unit = data.get(CONF_FUEL_UNIT, "L")
         self.roles: dict[str, str] = {role: data[role] for role in VEHICLE_ROLES if data.get(role)}
+        self.service_roles: dict[str, str] = {role: data[role] for role in SERVICE_ROLES if data.get(role)}
         self._unsub: Callable[[], None] | None = None
         self._pending: Callable[[], None] | None = None
         self._get: Callable[[str], State | None] = self.hass.states.get  # swapped during backfill
@@ -371,6 +404,7 @@ class VehicleTracker:
         snapshot, notes = sanitize(self.build(previous), previous, self.params.tank_l)
         for note in notes:
             self.runtime.log(f"{self.name}: {note}")
+        self._send_service_status(snapshot)
         if previous is None:
             self.state["since"] = dt_util.utcnow().isoformat()
             self._commit(snapshot)
@@ -384,6 +418,25 @@ class VehicleTracker:
             self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, found.payload)
         self._commit(snapshot)
         self._send_pending_soc(snapshot)
+
+    def _send_service_status(self, snapshot: Snapshot) -> None:
+        """Pass the car's own service countdown to the add-on when it changed."""
+        if not self.service_roles or not self.runtime.addon_maintenance:
+            return
+        values = {}
+        for role in SERVICE_ROLES:
+            state = self.hass.states.get(self.service_roles.get(role, ""))
+            value = parse_float(state.state if state else None)
+            if value is not None and role == ROLE_DISTANCE_TO_SERVICE and state.attributes.get(
+                    "unit_of_measurement") == "mi":
+                value *= MILES
+            values[role] = value
+        if all(v is None for v in values.values()) or values == self.state.get("service"):
+            return
+        self.state["service"] = values
+        self.runtime.emit("service.status", self.params.vehicle_id, snapshot.ts.isoformat(),
+                          {**values, "odometer_km": snapshot.odometer_km})
+        self.runtime.save_soon()
 
     # --- backfill -----------------------------------------------------------
 

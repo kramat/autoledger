@@ -7,12 +7,23 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import AutoLedgerAuthError, AutoLedgerClient, AutoLedgerError
 from .const import DOMAIN, SUMMARY_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def vehicle_device(vehicle: dict) -> DeviceInfo:
+    """The device of an add-on vehicle, shared by its sensors and binary sensors."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"vehicle_{vehicle['id']}")},
+        name=vehicle["name"],
+        manufacturer=vehicle.get("make") or "AutoLedger",
+        model=vehicle.get("model"),
+    )
 
 
 class SummaryCoordinator(DataUpdateCoordinator[dict]):

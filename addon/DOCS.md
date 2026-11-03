@@ -23,6 +23,22 @@ For a car in the AutoLedger Collector, every drive also becomes a **trip** with 
 | Log level | How much the add-on writes to its log |
 | Network: port 8099 | Leave empty to keep the API internal. Set a port to use the API from your own scripts; send the token from **Settings** as `Authorization: Bearer <token>`. |
 
+## Maintenance reminders
+
+Under **Maintenance → Schedules**, add what recurs: *Service every 12 months or 15 000 km*, *APK every year*. Enter when it was last done; after that, every maintenance entry of the same category (or linked to the schedule) moves it forward by itself. **Log as done** fills in the entry for you. A schedule is *due soon* within its reminder window (default 30 days or 1 000 km) and *overdue* after the date or km. Km-based dates are estimated from how much the car drove in the last 90 days.
+
+With the AutoLedger Collector 0.4.0, each car gets `sensor.<car>_next_maintenance` (days to the next due item), `binary_sensor.<car>_maintenance_due`, and the event `autoledger_maintenance_due` for your own notifications.
+
+## Reports
+
+**Reports** shows a calendar year (or any period) per month, quarter or year, with the cars side by side. *Per year* figures scale the period to 365 days, so a car with a shorter history compares fairly. Below that are monthly trends of € per km and consumption, and consumption per season. **Export XLSX / CSV** downloads the report.
+
 ## Data and backups
 
 Everything is stored in the add-on's data folder and included in Home Assistant backups. Before each database upgrade, the add-on also makes a copy in `backups/` inside that folder.
+
+Under **Settings**:
+
+- **Export**: all records as one Excel workbook, or one CSV per type.
+- **Import CSV**: refuels, maintenance, odometer readings or other costs from a spreadsheet. The preview shows how each row is read (columns, decimal comma, day-first dates) before anything is saved, and rows that are already there are skipped.
+- **Backup**: a JSON file with everything, to move to another installation. **Restore** loads it into an empty add-on, or adds only the records that are missing. The current database is copied to `backups/` first.

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { api, type MonthTotals, type Summary, type Trip, type VehicleSummary } from '../api'
+import { api, type MonthTotals, type ScheduleDue, type Summary, type Trip, type VehicleSummary } from '../api'
 import ChartBox from '../components/ChartBox.vue'
 import { fmtDate, fmtDateTime, fmtMonth, km, money, num } from '../format'
-import { label, VEHICLE_TYPES } from '../labels'
+import { DUE_STATUSES, label, VEHICLE_TYPES } from '../labels'
 import { periodRange, state } from '../store'
 import { useTheme } from '../theme'
 
@@ -37,6 +37,13 @@ const hasElectricity = computed(() => monthly.value.some((m) => m.electricity_co
 function tripRoute(t: Trip): string {
   const from = t.start_address ?? t.start_zone ?? '?'
   return t.kind === 'round_trip' ? `round trip from ${t.start_zone ?? from}` : `${from} → ${t.end_address ?? t.end_zone ?? '?'}`
+}
+
+function dueText(item: ScheduleDue): string {
+  const parts = []
+  if (item.estimated_date) parts.push(`${item.days_left != null && item.days_left < 0 ? 'was due' : 'due'} ${fmtDate(item.estimated_date)}`)
+  if (item.km_left != null) parts.push(item.km_left >= 0 ? `${km(item.km_left)} left` : `${km(-item.km_left)} over`)
+  return parts.join(' · ')
 }
 
 function distanceNote(v: VehicleSummary): string | null {
@@ -232,6 +239,11 @@ const kmOption = computed(() => {
           </p>
           <p v-if="v.last_refuel" class="small muted" style="margin: 4px 0 0">
             Last refuel {{ fmtDate(v.last_refuel.ts) }}: {{ num(v.last_refuel.litres, 1) }} L for {{ money(v.last_refuel.total) }}
+          </p>
+          <p v-if="v.next_maintenance" class="small" style="margin: 8px 0 0">
+            <span class="badge" :class="v.next_maintenance.status" style="margin-right: 6px">{{ DUE_STATUSES[v.next_maintenance.status] }}</span>
+            <router-link :to="{ path: '/maintenance', query: $route.query }">{{ v.next_maintenance.name }}</router-link>
+            {{ dueText(v.next_maintenance) }}
           </p>
           <p v-if="distanceNote(v)" class="small" style="margin: 8px 0 0">{{ distanceNote(v) }}</p>
           <p v-if="v.odometer_points_ignored" class="small" style="margin: 8px 0 0">

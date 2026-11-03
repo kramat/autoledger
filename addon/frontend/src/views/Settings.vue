@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { api, ApiError, type Info, type Resource, type Settings } from '../api'
+import { api, ApiError, type Info, type Resource, type RestoreResult, type Settings } from '../api'
+import ImportDialog from '../components/ImportDialog.vue'
 import { fmtDateTime } from '../format'
-import { state, toast } from '../store'
+import { loadVehicles, state, toast } from '../store'
 
 const form = reactive<Settings>(JSON.parse(JSON.stringify(state.settings)))
 const errors = ref<Record<string, string>>({})
@@ -18,9 +19,49 @@ const exports: { resource: Resource; label: string }[] = [
   { resource: 'refuels', label: 'Refuels' },
   { resource: 'odometer-readings', label: 'Odometer readings' },
   { resource: 'charges', label: 'Charges' },
+  { resource: 'trips', label: 'Trips' },
+  { resource: 'idle-records', label: 'Climate & standby' },
   { resource: 'maintenance', label: 'Maintenance' },
+  { resource: 'maintenance-schedules', label: 'Maintenance schedules' },
   { resource: 'expenses', label: 'Other costs' },
 ]
+
+const importing = ref(false)
+const restoreFile = ref<File | null>(null)
+const restoreMode = ref<'empty' | 'merge'>('empty')
+const restoreResult = ref<RestoreResult | null>(null)
+const restoreError = ref('')
+const restoring = ref(false)
+
+function pickBackup(event: Event): void {
+  restoreFile.value = (event.target as HTMLInputElement).files?.[0] ?? null
+  restoreResult.value = null
+  restoreError.value = ''
+}
+
+async function restore(): Promise<void> {
+  if (!restoreFile.value) return
+  restoring.value = true
+  restoreError.value = ''
+  try {
+    const data = JSON.parse(await restoreFile.value.text())
+    restoreResult.value = await api.restoreBackup(data, restoreMode.value)
+    await loadVehicles()
+    toast('Backup restored')
+  } catch (err) {
+    restoreError.value = err instanceof SyntaxError ? 'This file is not a JSON backup.' : (err as Error).message
+  } finally {
+    restoring.value = false
+  }
+}
+
+function restoredCount(result: RestoreResult): number {
+  return Object.values(result.tables).reduce((sum, t) => sum + t.inserted, 0)
+}
+
+function skippedCount(result: RestoreResult): number {
+  return Object.values(result.tables).reduce((sum, t) => sum + t.skipped, 0)
+}
 
 async function save(): Promise<void> {
   saving.value = true
@@ -67,7 +108,7 @@ onMounted(async () => {
   <div class="stack">
     <form class="card" @submit.prevent="save">
       <h2>Prices and currency</h2>
-      <p class="small muted">Defaults used when a price is not known. The collector (coming in M2) uses them too.</p>
+      <p class="small muted">Defaults used when a price is not known, also by the Collector.</p>
       <div class="form-grid">
         <label class="field half" :class="{ invalid: errors.currency }">
           <span>Currency (ISO code)</span>
@@ -102,12 +143,58 @@ onMounted(async () => {
 
     <section class="card">
       <h2>Export</h2>
-      <p class="small muted">Download all records as CSV (one file per type).</p>
-      <div class="actions" style="display: flex; flex-wrap: wrap; gap: 8px">
+      <p class="small muted">All records in one Excel workbook (a sheet per type), or one CSV file per type.</p>
+      <div class="button-row">
+        <a :href="api.recordsWorkbookUrl()" download><button type="button" class="primary">All records (XLSX)</button></a>
         <a v-for="e in exports" :key="e.resource" :href="api.exportUrl(e.resource)" download>
           <button type="button">{{ e.label }}</button>
         </a>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>Import</h2>
+      <p class="small muted">
+        Refuels, maintenance, odometer readings or other costs from a CSV file, for example history from a spreadsheet.
+        You check the columns on a preview before anything is saved.
+      </p>
+      <div class="button-row">
+        <button type="button" :disabled="!state.vehicles.length" @click="importing = true">Import CSV…</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Backup</h2>
+      <p class="small muted">
+        A full JSON backup of everything in AutoLedger, to move to another installation. Home Assistant backups include
+        the add-on's database as well. The API token is not in the file.
+      </p>
+      <div class="button-row">
+        <a :href="api.backupUrl()" download><button type="button">Download backup</button></a>
+      </div>
+      <h3 style="margin: 16px 0 8px">Restore</h3>
+      <div class="form-grid" style="margin: 0 0 12px">
+        <label class="field">
+          <span>Backup file</span>
+          <input type="file" accept=".json,application/json" @change="pickBackup" />
+        </label>
+        <label class="field">
+          <span>How</span>
+          <select v-model="restoreMode">
+            <option value="empty">Into this add-on while it is still empty</option>
+            <option value="merge">Add what is missing, keep what is here</option>
+          </select>
+        </label>
+      </div>
+      <p class="small muted" style="margin: 0 0 12px">The current database is copied to /data/backups first.</p>
+      <div class="button-row">
+        <button type="button" class="primary" :disabled="!restoreFile || restoring" @click="restore">Restore</button>
+      </div>
+      <p v-if="restoreError" class="notice error" style="margin-top: 12px">{{ restoreError }}</p>
+      <p v-if="restoreResult" class="notice" style="margin-top: 12px">
+        Restored {{ restoredCount(restoreResult) }} records<template v-if="skippedCount(restoreResult)">;
+          {{ skippedCount(restoreResult) }} were already here</template>.
+      </p>
     </section>
 
     <section class="card">
@@ -139,5 +226,15 @@ onMounted(async () => {
     <section v-if="info" class="card small muted">
       {{ info.name }} {{ info.version }} · API v{{ info.api_version }} · Time zone {{ info.timezone }}
     </section>
+    <ImportDialog v-if="importing" @close="importing = false"
+      @imported="(n) => toast(`${n} records imported`)" />
   </div>
 </template>
+
+<style scoped>
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+</style>

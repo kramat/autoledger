@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfEnergy, UnitOfLength, UnitOfVolume
+from homeassistant.const import UnitOfEnergy, UnitOfLength, UnitOfTime, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -23,7 +23,7 @@ from homeassistant.util import dt as dt_util
 
 from . import AutoLedgerConfigEntry
 from .const import DOMAIN, SIGNAL_CHARGER_UPDATE, VERSION
-from .coordinator import SummaryCoordinator
+from .coordinator import SummaryCoordinator, vehicle_device
 from .runtime import ChargerTracker
 
 
@@ -54,6 +54,27 @@ def _trip_attributes(trip: dict | None) -> dict:
         "energy_kwh": costing.get("energy_kwh"),
         "fuel_l": costing.get("fuel_l"),
         "cost": costing.get("cost"),
+    }
+
+
+def _maintenance_attributes(item: dict) -> dict:
+    """The most urgent schedule, every schedule in short, and the car's own countdown."""
+    first = item.get("next_maintenance") or {}
+    car = item.get("car_service") or {}
+    return {
+        "name": first.get("name"),
+        "status": first.get("status"),
+        "due_date": first.get("due_date"),
+        "due_km": first.get("due_km"),
+        "km_left": first.get("km_left"),
+        "estimated_date": first.get("estimated_date"),
+        "reason": first.get("reason"),
+        "schedules": [
+            {k: m.get(k) for k in ("name", "status", "estimated_date", "km_left")}
+            for m in item.get("maintenance") or []
+        ],
+        "car_days_to_service": car.get("days_to_service"),
+        "car_distance_to_service": car.get("distance_to_service"),
     }
 
 
@@ -117,6 +138,12 @@ VEHICLE_SENSORS: tuple[VehicleSensorDescription, ...] = (
         },
     ),
     VehicleSensorDescription(
+        key="next_maintenance", translation_key="next_maintenance", device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.DAYS, suggested_display_precision=0,
+        value_fn=lambda i: (i.get("next_maintenance") or {}).get("days_left"),
+        attrs_fn=_maintenance_attributes,
+    ),
+    VehicleSensorDescription(
         key="odometer", translation_key="odometer", device_class=SensorDeviceClass.DISTANCE,
         native_unit_of_measurement=UnitOfLength.KILOMETERS, state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=0, value_fn=lambda i: i.get("odometer_km"),
@@ -171,12 +198,7 @@ class VehicleSensor(CoordinatorEntity[SummaryCoordinator], SensorEntity):
         self.entity_description = description
         self._vehicle_id = vehicle["id"]
         self._attr_unique_id = f"{vehicle['id']}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"vehicle_{vehicle['id']}")},
-            name=vehicle["name"],
-            manufacturer=vehicle.get("make") or "AutoLedger",
-            model=vehicle.get("model"),
-        )
+        self._attr_device_info = vehicle_device(vehicle)
         currency = (coordinator.data or {}).get("currency", "EUR")
         if description.money:
             self._attr_native_unit_of_measurement = currency

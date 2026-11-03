@@ -16,6 +16,7 @@ from .charging import update_cost
 from .db import utcnow
 from .models import ChargeSession, IdleRecord, IngestEvent, OdometerReading, Refuel, Trip, Vehicle
 from .review import add_item
+from .schedules import save_car_service
 from .schemas import (
     ChargePayload,
     ExternalChargePayload,
@@ -23,6 +24,7 @@ from .schemas import (
     IngestEventIn,
     OdometerPayload,
     RefuelPayload,
+    ServiceStatusPayload,
     SettingsModel,
     SocUpdatePayload,
     TripPayload,
@@ -301,6 +303,13 @@ def _idle(db: Session, event: IngestEventIn, _settings: SettingsModel) -> str:
     return idle.id
 
 
+def _service_status(db: Session, event: IngestEventIn, _settings: SettingsModel) -> None:
+    """The car's own service countdown, shown next to the maintenance schedules."""
+    vehicle = _vehicle(db, event)
+    save_car_service(db, vehicle.id, _payload(ServiceStatusPayload, event), event.occurred_at)
+    return None
+
+
 HANDLERS: dict[str, Callable[[Session, IngestEventIn, SettingsModel], str | None]] = {
     "trip.recorded": _trip,
     "idle.recorded": _idle,
@@ -311,6 +320,7 @@ HANDLERS: dict[str, Callable[[Session, IngestEventIn, SettingsModel], str | None
     "external_charge.detected": _external_charge,
     "refuel.detected": _refuel,
     "odometer.reading": _odometer,
+    "service.status": _service_status,
 }
 
 

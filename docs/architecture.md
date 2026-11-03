@@ -46,13 +46,16 @@ Collector (custom_components/autoledger)
 └── diagnostics.py
 
 Add-on (addon/backend/autoledger, addon/frontend)
-├── api/                  FastAPI routers (/api/v1/...): generic CRUD, trips (split/merge), inbox, summary, export
+├── api/                  FastAPI routers (/api/v1/...): generic CRUD, trips (split/merge), inbox, summary,
+│                         schedules (due), reports, export (CSV/XLSX), backup/restore, CSV import
 ├── ingest.py             validates and stores collector events, idempotent
 ├── ledger.py             cost engine: replays records per vehicle, cost basis, kWh per %, reconciliation
+├── maintenance.py        when a schedule is due (pure); schedules.py loads it per vehicle
+├── reports.py            grouped periods, per-year scaling, seasons
+├── importer.py           CSV parsing: column guessing, decimal commas, date orders
 ├── book.py               loads a vehicle's records into the ledger
 ├── models.py, migrations/ SQLAlchemy models + Alembic migrations
 └── frontend/             Vue 3 single-page app, served under the Ingress path
-                          (reports and maintenance reminders follow in M4)
 ```
 
 ## Data flow

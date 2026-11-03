@@ -49,6 +49,14 @@ def _confirm_when_edited(fields: set[str]):
     return after_update
 
 
+def _check_schedule(db: Session, obj: models.MaintenanceRecord) -> None:
+    if obj.schedule_id is None:
+        return
+    schedule = db.get(models.MaintenanceSchedule, obj.schedule_id)
+    if schedule is None or schedule.deleted_at is not None or schedule.vehicle_id != obj.vehicle_id:
+        raise field_error("schedule_id", "Pick a schedule of the same vehicle")
+
+
 def _add_consumption(db: Session, request: Request, items: list[schemas.RefuelOut]) -> None:
     """Attach full-to-full consumption to the refuels that close an interval."""
     tz = request.app.state.config.tz
@@ -119,6 +127,7 @@ MAINTENANCE = ResourceSpec(
     schema_out=schemas.MaintenanceOut,
     order_by=(models.MaintenanceRecord.date.desc(), models.MaintenanceRecord.created_at.desc()),
     time_field="date",
+    before_save=_check_schedule,
 )
 
 EXPENSES = ResourceSpec(

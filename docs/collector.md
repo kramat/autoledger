@@ -32,6 +32,7 @@ Every setting can be changed later through the subentry's **Reconfigure** option
 | `charging_state` | no | sensor or binary_sensor | Telling charging apart from noise, public charge confirmation |
 | `plug_state` | no | sensor or binary_sensor (connected/disconnected) | Charge-session vehicle attribution |
 | `car_timestamp` | no | sensor containing the car's own report time | Exact event times for cloud-based cars |
+| `days_to_service`, `distance_to_service` | no | sensors with the car's own service countdown (Lynk: `…_days_to_service`, `…_distance_to_service`) | Shown next to the maintenance schedules as a cross-check. Read at every snapshot and sent as `service.status` when they change; they do not trigger a snapshot. |
 | `fuel_flap`, `running`, `fuel_price` | *(M5)* | | Refuel confirmation, live trip mode, refuel price suggestion. Until then the add-on suggests the price of your last refuel, or the default from Settings. |
 
 The vehicle's type, tank size, usable battery and wall kWh per % come from the add-on. The Collector takes them over again on every summary poll (5 min), so a change on the add-on's Vehicles page needs no reconfigure or reload. The latest values are kept in the Collector's store and used after a restart, even when the add-on is not reachable yet.
@@ -179,7 +180,8 @@ One HA **device** per add-on vehicle (manual vehicles such as the VW Up included
 | `sensor.<charger>_session_energy` / `_session_cost` | kWh / EUR | Live values of the open session |
 | `sensor.<car>_last_trip` | km | Attributes: start, end, from, to, kWh, L, cost |
 | `sensor.<car>_electric_consumption` | kWh/100 km | Rolling 12 months, trips only. Attribute `electric_share` (PHEV). |
-| *(M4)* `next_maintenance` | | Arrives with maintenance schedules |
+| `sensor.<car>_next_maintenance` | d | device_class `duration`. Days to the most urgent active schedule (negative when overdue). Attributes: `name`, `status`, `due_date`, `due_km`, `km_left`, `estimated_date`, `reason`, `schedules`, and the car's own `car_days_to_service` / `car_distance_to_service`. |
+| `binary_sensor.<car>_maintenance_due` | — | device_class `problem`. On while a schedule is due soon or overdue. Attribute `items`. |
 
 ## Services
 
@@ -204,8 +206,9 @@ The `add_*` services return the new record's `id` as a service response.
 | `autoledger_refuel_detected` | `vehicle_id`, `record_id`, `litres` |
 | `autoledger_review_needed` | `vehicle_id`, `record_id`, `reason` (`refuel_price`, `public_charge_price`), `energy_kwh` for charges |
 | `autoledger_trip_recorded` | `vehicle_id`, `record_id`, `distance_km`, `start_ts`, `end_ts`, `kind` |
+| `autoledger_maintenance_due` | `vehicle_id`, `vehicle_name`, `schedule_id`, `name`, `status` (`soon`/`overdue`), `due_date`, `due_km`, `km_left`, `estimated_date`, `days_left`, `reason` |
 
-Events fire once the add-on has stored the record, so `record_id` is always valid.
+Events fire once the add-on has stored the record, so `record_id` is always valid. `autoledger_maintenance_due` fires from the summary poll: once when a schedule becomes due soon, and once more when it becomes overdue. After it is done, the next cycle is announced again. What was announced is kept in the Collector's store, so a restart does not repeat it.
 
 Example: ask for the receipt after a refuel.
 

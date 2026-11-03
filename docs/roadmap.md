@@ -7,7 +7,7 @@ Each milestone ends with something usable. The manual workflow comes first, so t
 | **M1: Add-on core** ✅ built | Add-on skeleton (Ingress, `/data`, migrations), vehicles, refuels, odometer readings, maintenance log, expenses, overview + fuel + maintenance pages, cost engine for refuels, CSV export | The VW Up's refuels and maintenance can be logged and give L/100 km, €/km and monthly costs |
 | **M2: Collector, charging & fuel** ✅ built | Collector config flow (discovery + manual), vehicle and charger subentries, snapshot builder, home charge detector with per-increment pricing, refuel and external charge detection, outbox, ingest API, review inbox, summary sensors | A night charge on the Shelly shows up with correct kWh and € even when the power sensor flaps. A refuel of the Lynk ends up in the review inbox. |
 | **M3: Trips** ✅ built | Trip detector (snapshot mode), idle records, kWh-per-% learning, battery/tank cost basis, trips page with map, merge/split, backfill service | Every Lynk drive appears with km, kWh, L and €. The 2 Nov example reproduces the numbers in [costs.md](costs.md#worked-example-lynk--co-2-nov-2026). |
-| **M4: Insight** | Reports (period, compare, trends), maintenance schedules and reminders, fuel reconciliation, XLSX export, JSON backup/restore, CSV import | Year report for both cars, and maintenance reminders as HA sensors |
+| **M4: Insight** ✅ built | Reports (period, compare, trends), maintenance schedules and reminders, fuel reconciliation (built in M3), XLSX export, JSON backup/restore, CSV import | Year report for both cars, and maintenance reminders as HA sensors |
 | **M5: Extras** | Snapshot boost, live trip mode, receipt photo attachments, recurring expenses + depreciation, fuel price entity support | — |
 
 ## M1 as built (2 Nov 2026)
@@ -27,6 +27,21 @@ Each milestone ends with something usable. The manual workflow comes first, so t
   - the image has not been built by a real Supervisor yet; that happens on first install;
   - no CSV import yet (M4), so old data is entered by hand with back-dated dates;
   - maintenance schedules and reminders follow in M4.
+
+## M4 as built (3 Nov 2026)
+
+- **Add-on 0.4.0:**
+  - migration 0004: `maintenance_schedules`, and `maintenance_records.schedule_id`;
+  - due logic (`maintenance.py`): the latest of the starting point and the records that fulfil a schedule (linked, or by category), due by date and/or km, km-based dates estimated from the driving rate of the last 90 days, status `ok`/`soon`/`overdue`/`unknown`; `/maintenance-schedules` with `due`, `/maintenance-schedules/due`, and `maintenance`, `next_maintenance` and `car_service` in the summary;
+  - ingest of `service.status` (the car's own countdown), kept per vehicle in `settings`;
+  - reports: `/reports/period` (month, quarter, year), `/reports/compare` with figures per year, `/reports/trends` with seasons, exported as XLSX or CSV;
+  - XLSX export per type and of all records (openpyxl), JSON `/backup` and `/restore` (empty or merge, with a database copy first), CSV import with a preview, column guessing (English and Dutch), decimal commas, date orders and duplicate detection;
+  - GUI: Schedules on the Maintenance page (status, next due, *Log as done*, the car's countdown), next maintenance on the overview, a Reports page (year report, cars side by side, cost per group, trends, winter and summer), Import, Backup and Restore in Settings.
+- **Collector 0.4.0:**
+  - `sensor.<car>_next_maintenance` (days), `binary_sensor.<car>_maintenance_due`, event `autoledger_maintenance_due` once per schedule when it becomes soon and again when overdue, remembered in the store;
+  - optional roles `days_to_service` and `distance_to_service`, sent as `service.status` when they change, only to an add-on that knows maintenance (0.4.0 or later).
+- **Tests:** 91 add-on tests (due logic, schedules API, reports adding up, XLSX, backup round trip, CSV import) and 32 Collector engine tests. The dev database migrated from 0003 to 0004 with its backup, and its JSON backup restored into a fresh add-on gives identical summary, report, due list and trips.
+- **Not built:** attachments in the backup (they arrive with M5), recurring expenses in the CSV import, a Repair issue for overdue maintenance.
 
 ## 0.3.1 (3 Nov 2026)
 

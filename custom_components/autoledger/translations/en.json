@@ -72,11 +72,14 @@
             "address": "Address",
             "charging_state": "Charging state",
             "plug_state": "Charging cable connected",
-            "car_timestamp": "Time the car last reported"
+            "car_timestamp": "Time the car last reported",
+            "days_to_service": "Days to service (the car's own countdown)",
+            "distance_to_service": "Distance to service (the car's own countdown)"
           },
           "data_description": {
             "car_timestamp": "Cloud-connected cars report with a delay. With this, records get the car's own time.",
-            "fuel_unit": "Litres, or % of the tank (the tank size from the add-on is used to convert)."
+            "fuel_unit": "Litres, or % of the tank (the tank size from the add-on is used to convert).",
+            "days_to_service": "Shown next to your maintenance schedules in AutoLedger as a cross-check."
           },
           "sections": {
             "thresholds": {
@@ -105,7 +108,9 @@
             "address": "Address",
             "charging_state": "Charging state",
             "plug_state": "Charging cable connected",
-            "car_timestamp": "Time the car last reported"
+            "car_timestamp": "Time the car last reported",
+            "days_to_service": "Days to service (the car's own countdown)",
+            "distance_to_service": "Distance to service (the car's own countdown)"
           },
           "sections": {
             "thresholds": {
@@ -118,6 +123,9 @@
                 "idle_min_l": "Climate & standby when the parked tank drops at least"
               }
             }
+          },
+          "data_description": {
+            "days_to_service": "Shown next to your maintenance schedules in AutoLedger as a cross-check."
           }
         }
       },
@@ -245,11 +253,17 @@
       },
       "session_cost": {
         "name": "Session cost"
+      },
+      "next_maintenance": {
+        "name": "Next maintenance"
       }
     },
     "binary_sensor": {
       "session_active": {
         "name": "Charging"
+      },
+      "maintenance_due": {
+        "name": "Maintenance due"
       }
     }
   },

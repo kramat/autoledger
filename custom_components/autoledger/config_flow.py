@@ -64,6 +64,8 @@ from .const import (
     ROLE_ADDRESS,
     ROLE_BATTERY,
     ROLE_CAR_TIMESTAMP,
+    ROLE_DAYS_TO_SERVICE,
+    ROLE_DISTANCE_TO_SERVICE,
     ROLE_CHARGING,
     ROLE_FUEL,
     ROLE_LATITUDE,
@@ -92,6 +94,8 @@ SUGGESTIONS: dict[str, tuple[str, ...]] = {
     ROLE_CHARGING: ("_charge_state", "_charging_state", "_charging_status", "_charging"),
     ROLE_PLUG: ("_charger_connection_status", "_plug_status", "_plugged_in", "_charger_connected"),
     ROLE_CAR_TIMESTAMP: ("_last_updated_by_car", "_last_update"),
+    ROLE_DAYS_TO_SERVICE: ("_days_to_service",),
+    ROLE_DISTANCE_TO_SERVICE: ("_distance_to_service",),
 }
 
 
@@ -345,6 +349,8 @@ def _vehicle_schema(vehicle_type: str, with_odometer: bool = False) -> vol.Schem
         fields[vol.Optional(ROLE_CHARGING)] = _entity(["sensor", "binary_sensor"])
         fields[vol.Optional(ROLE_PLUG)] = _entity(["sensor", "binary_sensor"])
     fields[vol.Optional(ROLE_CAR_TIMESTAMP)] = _entity("sensor")
+    fields[vol.Optional(ROLE_DAYS_TO_SERVICE)] = _entity("sensor")
+    fields[vol.Optional(ROLE_DISTANCE_TO_SERVICE)] = _entity("sensor")
     thresholds = {vol.Required(CONF_MIN_TRIP_KM, default=0.5): _number(0.1, 10, 0.1, "km")}
     if vehicle_type in ("PHEV", "ICE"):
         thresholds[vol.Required(CONF_REFUEL_MIN_L, default=3.0)] = _number(0.5, 50, 0.5, "L")

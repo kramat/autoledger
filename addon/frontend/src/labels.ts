@@ -72,6 +72,37 @@ export const FACTOR_MODES: Option[] = [
   { value: 'default', label: 'from battery capacity' },
 ]
 
+export const DUE_STATUSES: Record<string, string> = {
+  ok: '✓ On track',
+  soon: '⚠ Due soon',
+  overdue: '⛔ Overdue',
+  unknown: '? Not known yet',
+}
+
+export const IMPORT_RESOURCES: Option[] = [
+  { value: 'refuels', label: 'Refuels' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'odometer-readings', label: 'Odometer readings' },
+  { value: 'expenses', label: 'Other costs (one-off)' },
+]
+
+export const IMPORT_FIELDS: Record<string, string> = {
+  ts: 'Date (and time)',
+  date: 'Date',
+  litres: 'Litres',
+  price_per_l: 'Price per litre',
+  total: 'Total paid',
+  odometer_km: 'Odometer (km)',
+  full_tank: 'Full tank',
+  station: 'Station',
+  note: 'Note',
+  category: 'Category',
+  description: 'Description',
+  garage: 'Garage',
+  cost: 'Cost',
+  amount: 'Amount',
+}
+
 export const REVIEW_REASONS: Record<string, string> = {
   refuel_price: 'Refuel detected: check the litres and enter what you paid',
   public_charge_price: 'Charge away from home: enter what you paid',

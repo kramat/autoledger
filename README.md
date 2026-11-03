@@ -2,7 +2,7 @@
 
 Automatic trip, charging and fuel bookkeeping for Home Assistant, with a web GUI that brings all costs and maintenance for all your cars together.
 
-> **Status: milestone M3.** The add-on handles manual bookkeeping, charging, trips and a review inbox. The AutoLedger Collector integration records every drive with km, kWh, litres and cost, home charge sessions (priced with your live electricity price), refuels, public charging and climate & standby use, and can backfill the last days from the recorder. Next: reports and maintenance reminders (M4), see [docs/roadmap.md](docs/roadmap.md).
+> **Status: milestone M4.** The add-on handles manual bookkeeping, charging, trips, a review inbox, maintenance schedules with reminders, reports (year report, cars side by side, trends), XLSX export, JSON backup/restore and CSV import. The AutoLedger Collector integration records every drive with km, kWh, litres and cost, home charge sessions (priced with your live electricity price), refuels, public charging and climate & standby use, can backfill the last days from the recorder, and exposes maintenance reminders as sensors. Next: extras (M5), see [docs/roadmap.md](docs/roadmap.md).
 
 ## What it does
 
