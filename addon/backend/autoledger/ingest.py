@@ -1,4 +1,4 @@
-"""Apply collector events (docs/api.md#ingest-collector--add-on-m2).
+"""Apply collector events (docs/api.md#ingest-collector--add-on).
 
 Every event is applied at most once (by uuid) inside its own savepoint, so one
 bad event never blocks the rest of a batch. Rejected events are logged and

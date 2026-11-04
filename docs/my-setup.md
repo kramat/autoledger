@@ -63,20 +63,19 @@ Set **Wall kWh per battery %** to `0.165` on the add-on's Vehicles page.
 
 ## VW Up (2018): manual vehicle
 
-- Type `ICE`, petrol. Tank about 35 L (1.0 MPI; to confirm).
+- Type `ICE`, petrol. Tank about 35 L (1.0 MPI).
 - At each fuel stop, log litres, total and odometer, from the GUI on your phone or with an HA dashboard button that calls `autoledger.add_refuel`.
 - Maintenance:
   - APK schedule, yearly;
   - service schedule, every 12 months or 15 000 km (adjust to the VW service plan).
-- It is compared side by side with the Lynk in **Reports → Compare**.
+- It is compared side by side with the Lynk on the **Reports** page.
 
-## Car dashboard integration
+## Car dashboard cards
 
-The existing HA dashboard `car-dashboard` ("Auto") gets an extra **Kosten** section with:
+Entities worth adding to the existing HA dashboard `car-dashboard` ("Auto"), with the entity ids of this installation:
 
-- `sensor.lynk_co_01_cost_this_month`, `…_cost_per_km` and `…_last_trip`;
-- the live session of the Shelly charger, from `sensor.shelly_ev_charger_session_cost`;
-- the review count;
+- `sensor.lynk_co_01_cost_this_month`, `sensor.lynk_co_01_total_cost_per_km` and `sensor.voordeur_lynk_co_01_last_trip`;
+- `sensor.voordeur_lynk_co_01_next_maintenance` and `binary_sensor.voordeur_lynk_co_01_maintenance_due`;
+- the live charge session: `binary_sensor.home_charger_charging` and `sensor.home_charger_session_cost`;
+- the review count, `sensor.autoledger_items_to_review`;
 - a shortcut card to the AutoLedger panel.
-
-The entity names here are examples; the final ones are decided in M2.

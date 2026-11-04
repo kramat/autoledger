@@ -25,29 +25,37 @@
 | Can be updated or restarted independently | — | ✅ |
 | Included in HA backups | ✅ `.storage` | ✅ add-on `/data` |
 
-The collector is deliberately **thin**. It detects, packages and delivers events. All bookkeeping, pricing and reporting happens in the add-on. That means detection bugs can be fixed with a collector update, and cost-model changes with an add-on update. Neither change destroys data.
+The collector is deliberately **thin**. It detects, packages and delivers events; the only pricing it does is valuing each kWh of a home charge at the moment it is delivered. All other bookkeeping, pricing and reporting happens in the add-on. That means detection bugs can be fixed with a collector update, and cost-model changes with an add-on update. Neither change destroys data.
 
 ## Components
 
 ```
 Collector (custom_components/autoledger)
 ├── config_flow.py        connection to the add-on + "vehicle" subentries + "charger" subentries
-├── runtime.py            per vehicle: snapshots on every relevant change, detection, backfill;
+├── __init__.py           setup, and the services (manual entry, backfill, resync)
+├── runtime.py            per vehicle: snapshots on every relevant change, detection, backfill, snapshot boost;
 │                         per charger: the session machine; the store and the outbox
 ├── engine/               pure logic, tested without HA
 │   ├── snapshot.py       Snapshot, parsing and sanitizing of entity states
 │   ├── detect.py         between two snapshots: trip, idle use, refuel, public charge, odometer
-│   └── charging.py       charger kWh counter → charge sessions, priced per kWh increment
-├── outbox.py             persisted queue of unsent events, retried with backoff
+│   ├── charging.py       charger kWh counter → charge sessions, priced per kWh increment
+│   ├── boost.py          when to ask the car's integration for fresh data
+│   └── maintenance.py    which maintenance items to announce as events
+├── outbox.py             persisted queue of unsent events, retried with backoff; the Repair issue
 ├── client.py             REST client for the add-on API
 ├── coordinator.py        polls /summary for the exposed sensors
 ├── sensor.py / binary_sensor.py
-├── services.yaml         manual entry services and backfill
-└── diagnostics.py
+├── services.yaml         service field definitions
+├── diagnostics.py
+├── translations/         en.json, nl.json
+└── brand/                icon.png, icon@2x.png
 
 Add-on (addon/backend/autoledger, addon/frontend)
-├── api/                  FastAPI routers (/api/v1/...): generic CRUD, trips (split/merge), inbox, summary,
-│                         schedules (due), reports, export (CSV/XLSX), backup/restore, CSV import
+├── api/                  FastAPI routers (/api/v1/...): generic CRUD, trips (split/merge), review inbox and ingest,
+│                         summary, schedules (due), reports, export (CSV/XLSX), backup/restore, CSV import,
+│                         attachments, info/settings/token
+├── auth.py               Ingress or bearer token for every /api route
+├── discovery.py          announces the add-on to the Supervisor discovery API
 ├── ingest.py             validates and stores collector events, idempotent
 ├── ledger.py             cost engine: replays records per vehicle, cost basis, kWh per %, reconciliation
 ├── maintenance.py        when a schedule is due (pure); schedules.py loads it per vehicle
@@ -55,6 +63,7 @@ Add-on (addon/backend/autoledger, addon/frontend)
 ├── importer.py           CSV parsing: column guessing, decimal commas, date orders
 ├── book.py               loads a vehicle's records into the ledger
 ├── models.py, migrations/ SQLAlchemy models + Alembic migrations
+├── migrate.py            runs the migrations on start, with a database backup first
 └── frontend/             Vue 3 single-page app, served under the Ingress path
 ```
 
@@ -65,16 +74,17 @@ Add-on (addon/backend/autoledger, addon/frontend)
 ```
 state_changed ─► Snapshot builder (debounce 30 s) ─► Detectors ─► Event {uuid, type, vehicle_id, payload}
                                                                         │
-                                       HA Store "autoledger.outbox" ◄───┘  (persisted before sending)
+                                   HA Store "autoledger.<entry_id>" ◄───┘  (persisted before sending)
                                                                         │
                                        POST /api/v1/ingest (batch) ◄────┘  retry with backoff until 2xx
                                                                         │
-                       add-on: store raw event ─► upsert record (trip / charge / refuel / …) ─► recalculate ledger
+                       add-on: store raw event ─► upsert record (trip / charge / refuel / …) ─► review item if needed
 ```
 
-- Every event has a UUID that the collector generates. The add-on ignores a UUID it has already seen, so retries are always safe.
+- Every event has a UUID that the collector generates. The add-on ignores a UUID it has already seen, so retries are always safe. An event the add-on rejects is logged and creates a review item, so nothing is dropped silently.
+- Costs are not calculated at ingest: the ledger replays the records on every read (see [Source of truth](#source-of-truth)).
 - An open charge session is sent as `charge.started`, then as `charge.updated` every 15 minutes, and finally as `charge.completed`. All three carry the same `session_id`, so the GUI shows a running session live and the record is never lost.
-- The collector keeps its detector state (last snapshot, open sessions) in its own HA Store and writes it **before** an event goes into the outbox. A restart in the middle of anything resumes cleanly.
+- The collector keeps its detector state (last snapshot, open sessions) and the outbox in one HA Store, which is saved whenever an event goes into the outbox. A restart in the middle of anything resumes cleanly.
 
 ### 2. Manual records (user → add-on)
 
@@ -101,15 +111,16 @@ Costs are always derived by **replaying** a vehicle's records in time order (see
 
 - The add-on listens on port `8099` inside the Supervisor network. That port is **not** mapped to the host by default.
 - **GUI access** goes only through Ingress. HA does the authentication, so there is no separate login.
-- **API access** from the collector uses a bearer token. The add-on generates it on first start and stores it in `/data/secret.json`. You can regenerate it in the add-on's Settings page.
-- **Discovery:** on start, the add-on registers itself with the Supervisor discovery API as service `autoledger`, sending its host, port and token. The collector's config flow handles the resulting `hassio` discovery, so setup is a single "Configure" click.
-  - Fallback for when the Supervisor does not route discovery for a custom integration (to be verified in milestone M2): the collector's config flow asks for the URL (default `http://local-autoledger:8099` for a locally installed add-on) and the token, which the add-on shows on its Settings page.
-- The collector checks the add-on's `api_version` from `GET /api/v1/info` and raises a Repair issue when the two versions are incompatible.
+- **API access** from the collector uses a bearer token. The add-on generates it on first start and stores it in `/data/secret.json`. You can regenerate it in the add-on's Settings page. Only `GET /api/v1/health` is open without it. If you map port 8099 to the host in the add-on's network settings, your own scripts need the same token.
+- **Discovery:** on every start, the add-on registers itself with the Supervisor discovery API as service `autoledger`, sending its host name, port and token. The collector's config flow handles the resulting `hassio` discovery, so setup is a single "Configure" click. When the integration is already set up, a new announcement updates its URL and token.
+  - Without discovery, the collector's config flow asks for the URL and the token, which the add-on shows on its Settings page. The URL is suggested from the installed add-ons (`http://<slug>:8099`, with dashes), else `http://local-autoledger:8099`.
+- When the add-on refuses the token, the collector asks for the new one through HA's re-authentication flow.
+- The collector checks the add-on's `api_version` from `GET /api/v1/info` when it connects (setup, reconfigure, re-authentication). An incompatible version is refused as "cannot connect".
 
 ## Time and units
 
 - Every timestamp is stored in **UTC** (ISO 8601 with `Z`) and shown in the HA time zone. Period boundaries in reports ("this month") use that local time zone.
-- Distances are stored in km, energy in kWh, fuel in litres and money in the add-on's currency (default `EUR`). Values are stored as decimals with 4 places and rounded only for display.
+- Distances are stored in km, energy in kWh, fuel in litres and money in the add-on's currency (default `EUR`). Totals are calculated from unrounded values and rounded only for display.
 - Where the car reports its own timestamp (for example the Lynk's `last_updated_by_car`), that is used as the event time instead of the moment HA received the value.
 
 ## Failure handling
@@ -119,13 +130,14 @@ Costs are always derived by **replaying** a vehicle's records in time order (see
 | Add-on stopped or updating | Events wait in the outbox, which is persisted, and are delivered when the add-on is back. After 24 h of failed delivery the collector raises a Repair issue. |
 | HA restarts while the car is parked | The last snapshot is restored. The next snapshot is compared against it, and everything that happened in between becomes normal events. |
 | HA restarts during a home charge | The open session and its last valid kWh reading are restored. The kWh counter is cumulative, so nothing is missed. |
-| A sensor goes `unavailable` or `unknown` | It is ignored. The last valid value is kept and its age is tracked. Deltas are only ever calculated between two valid readings. |
+| A sensor goes `unavailable` or `unknown` | It is ignored and the previous snapshot's value is kept. Deltas are only ever calculated between two valid readings. |
 | Charger kWh counter resets (firmware update, replacement) | A drop in the counter is treated as a reset. The new value becomes the base, and nothing negative is recorded. |
 | Cloud data is sparse or delayed (the Lynk case) | Trips are calculated per snapshot segment (see [collector.md](collector.md#trip-detection)). Uncertain cases go to the review inbox instead of being guessed silently. |
 | A detector misfires | You can edit or delete the record in the GUI. Fields you edited are locked, and later collector updates for the same record never overwrite them. |
+| The API token is regenerated | Delivery is refused and HA asks for the new token. Events wait in the outbox meanwhile. |
 
 ## Backups and migrations
 
 - The add-on database lives in `/data/autoledger.db`, which is part of normal HA backups.
-- Schema changes use Alembic migrations, which run automatically on add-on start. Before each migration the add-on copies the database to `/data/backups/autoledger-<version>.db`.
-- The GUI offers a full JSON export and import for moving between installations.
+- Schema changes use Alembic migrations, which run automatically on add-on start. Before migrating an existing database, the add-on copies it to `/data/backups/autoledger-<revision>.db`, named after the schema revision it had.
+- The GUI offers a full JSON backup and restore (into an empty database, or merged) for moving between installations. Attachments can be included in the backup.

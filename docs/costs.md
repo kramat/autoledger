@@ -9,7 +9,7 @@ All amounts are calculated by the add-on's **ledger**. This page defines every f
 | **Electricity** | Home and public charge sessions, consumed through trips and idle records |
 | **Fuel** | Refuels, consumed through trips and idle records |
 | **Maintenance** | Maintenance records |
-| **Other** | One-off and recurring expenses, optional depreciation |
+| **Other** | One-off and recurring expenses, and optional depreciation (reported separately as `depreciation_cost`) |
 
 **Energy cost** is electricity plus fuel. **Total cost** is all four categories.
 
@@ -24,9 +24,9 @@ cost = Σ  Δkwh_i × price(t_i)        for every counter increase i during the 
 avg_price = cost / energy_kwh
 ```
 
-- `price(t_i)` is the charger's price entity state at that moment. When the entity is unavailable, the fixed charger price is used, and after that the add-on's fallback electricity price. The source used is stored per sample.
+- `price(t_i)` is the charger's price entity state at that moment. When the entity is unavailable, the fixed charger price is used, and after that the add-on's fallback electricity price. The source used is stored per sample. A `session_fee` you enter is added.
 - **Your corrections** win over everything:
-  - *€/kWh*: `cost = energy_kwh × price`.
+  - *€/kWh*: `cost = energy_kwh × price + session_fee`.
   - *Total*: `cost = total`.
   - *Free*: `cost = 0`.
 
@@ -34,7 +34,7 @@ avg_price = cost / energy_kwh
 
 ### Public charge
 
-`cost = energy_kwh × price_per_kwh + session_fee`, or the *total* you entered. `energy_kwh` is what you enter from the charge receipt. For detected sessions it starts as the estimate `Δbattery% × kwh_per_pct`.
+`cost = energy_kwh × price_per_kwh + session_fee`, or the *total* you entered. `energy_kwh` is what you enter from the charge receipt. For detected sessions it starts as the estimate `Δbattery% × kwh_per_pct`, priced at the *public charging price* from Settings (default 0.59 €/kWh).
 
 ### Refuel
 
@@ -43,7 +43,7 @@ Two of `litres`, `price_per_l` and `total` are given, and the third is calculate
 - `total = litres × price_per_l`
 - `price_per_l = total / litres`
 
-For a detected refuel, the suggested `price_per_l` comes from the fuel price entity or the previous refuel. It stays marked *estimated* until you confirm it.
+For a detected refuel, `litres` is the rise of the tank level, and the suggested `price_per_l` comes from the fuel price entity, else the previous refuel, else the default price for the vehicle's fuel type from Settings. The refuel stays in the review inbox until you confirm or correct it.
 
 ## Before the first trip
 
@@ -86,7 +86,7 @@ on trip or idle (kwh_used, l_used):
 
 Trips use battery %, while charges are measured in kWh from the wall. The conversion factor `kwh_per_pct` therefore means *wall kWh needed for 1 % of battery*. It includes charging losses, so trip energy is valued at what you actually paid for.
 
-- **Learned automatically** from home sessions with known battery % at start and end, and at least 20 % added:
+- **Learned automatically** from home sessions with known battery % at start and end, and at least 20 % added (see [collector.md](collector.md#home-charge-detection) for how the battery % is found):
   `kwh_per_pct = median over the last 10 sessions of (energy_kwh / (soc_end − soc_start))`
   It needs 3 such sessions. A session that gives less than 0.6× or more than 1.6× the capacity-based value is a bad reading and is skipped.
 - **Until enough sessions exist:** `usable_capacity_kwh / 100 / 0.90`, assuming 90 % charging efficiency.
@@ -126,15 +126,15 @@ When no full-tank refuels are logged, the values stay provisional. Totals over l
 | Fuel consumption (connected car) | `Σ trip L / Σ trip km × 100` → L/100 km, reconciled values where available |
 | Fuel consumption (manual car) | Full-to-full: litres refuelled since the previous full tank / km since then × 100 |
 | Electric share (PHEV) | Share of trip km where `fuel_l` < 0.5 L per 10 km. This is an estimate and is labelled as such. |
-| Fuel consumption (connected car) and energy €/km | Trip-based only for periods that lie fully after the first trip; otherwise the full-to-full and odometer figures are used. |
-| Energy €/km | `(electricity + fuel cost of trips) / trip km` |
+| Fuel consumption (connected car) and energy €/km | Trip-based only for periods with at least 1 trip km and no energy counted on purchase basis (no charge or refuel before the first trip); otherwise the full-to-full and odometer figures are used. |
+| Energy €/km | `(electricity + fuel cost of trips) / trip km`; otherwise `energy cost / km in period` |
 | Total €/km | `all costs in period / km in period` |
 
 Idle records (climate, standby) count in energy cost but **not** in consumption per 100 km. They appear as their own line, *"climate & standby"*.
 
 ## Distance for manual vehicles
 
-A manual vehicle has no trips, so km per period comes from odometer values. Those come from odometer readings and from the odometer field of refuels and maintenance records.
+A manual vehicle has no trips, so km per period comes from odometer values. Those come from the vehicle's start odometer on its start date, from odometer readings, and from the odometer field of refuels and maintenance records. Connected cars use the same odometer values for km per period.
 
 - Between two known values, km are spread **evenly over time**, by linear interpolation.
 - After the last known value, the period shows *"not yet known"* rather than an estimate.
@@ -148,12 +148,12 @@ A manual vehicle has no trips to spread fuel over. Its fuel cost is therefore co
 ## Recurring expenses and depreciation
 
 - A recurring expense of amount *A* with interval *n* months adds `A / n` to every month in its active range. A yearly € 600 insurance becomes € 50 per month.
-- Depreciation: `(purchase_price − expected_resale) / months_between(purchase_date, expected_resale_date)` per month, pro rata for partial months, so the months from purchase to resale add up to exactly the loss of value. It is counted from the vehicle's tracking start (`start_date`) up to today, like every other figure, and shown as `depreciation_cost`, part of `total_cost`. It is off by default and can be switched on per vehicle.
-  Example: bought for € 45 000 on 1 Jun 2022, resale € 15 000 on 1 Jun 2029: 84 months, € 357.14 per month. Tracked from 1 Oct 2026, the 2026 report has October and 1–3 November: € 357.14 + € 35.71.
+- Depreciation: `(purchase_price − resale_estimate) / months_between(purchase_date, resale_date)` per month, pro rata for partial months, so the months from purchase to resale add up to exactly the loss of value. It is counted from the vehicle's tracking start (`start_date`, or the purchase date if that is later) up to today included, and never after the resale date. It is shown as `depreciation_cost`, part of `total_cost`. It is off by default and is switched on per vehicle (`depreciation_enabled`), which needs a purchase price, purchase date and resale date.
+  Example: bought for € 45 000 on 1 Jun 2022, resale € 15 000 on 1 Jun 2029: 84 months, € 357.14 per month. Tracked from 1 Oct 2026, the 2026 report on 3 November has October and 1–3 November: € 357.14 + € 35.71.
 
 ## Recalculation
 
-- Nothing derived is stored: every request replays the vehicle's records (a few thousand per year take milliseconds), so any change to a charge, refuel or trip is reflected everywhere at once. *(A per-record cache of the cost-basis state can follow when histories grow large.)*
+- Nothing derived is stored: every request replays the vehicle's records (a few thousand per year take milliseconds), so any change to a charge, refuel or trip is reflected everywhere at once.
 - Each trip and idle record in the API carries a `costing` block with the full calculation: factor and its source, kWh, kWh price, provisional and reconciled litres, litre price and notes. The Trips page shows it under **Details**.
 
 ## Worked example (Lynk & Co, 2 Nov 2026)
