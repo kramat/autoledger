@@ -143,3 +143,40 @@ def test_backup_with_attachments(client, vw_up, tmp_path):
     with TestClient(bare, headers={"Authorization": f"Bearer {bare.state.token}"}) as other:
         assert other.post(f"{API}/restore", json=small).json()["files"] == {"written": 0, "skipped": 0}
         assert other.get(f"{API}/attachments/{item['id']}/file").status_code == 404
+
+
+# --- Dutch messages -------------------------------------------------------------
+
+NL = {"Accept-Language": "nl"}
+
+
+def test_errors_follow_accept_language(client, vw_up):
+    from autoledger.i18n import language
+
+    assert language("nl-NL,nl;q=0.9,en;q=0.8") == "nl"
+    assert language("de-DE,en;q=0.5") == "en" and language(None) == "en"
+
+    body = {"vehicle_id": vw_up["id"], "ts": "2026-10-01T12:00:00+02:00", "litres": 30}
+    english = client.post(f"{API}/refuels", json=body).json()["error"]
+    assert english["message"] == "Give at least two of litres, price_per_l and total"
+    dutch = client.post(f"{API}/refuels", json=body, headers=NL).json()["error"]
+    assert dutch["message"] == "Vul minstens twee van liters, prijs per liter en totaal in"
+
+    # Pydantic's own checks, with their limits filled in.
+    fields = client.post(f"{API}/refuels", json={**body, "litres": -1, "total": 60}, headers=NL).json()["error"]["fields"]
+    assert fields["litres"] == "Moet groter zijn dan 0"
+    missing = client.post(f"{API}/maintenance", json={"vehicle_id": vw_up["id"]}, headers=NL).json()["error"]["fields"]
+    assert missing["date"] == "Vul dit veld in"
+
+    # HTTP errors and messages with values in them.
+    assert client.get(f"{API}/attachments/nope/file", headers=NL).json()["error"]["message"] == "Bijlage niet gevonden"
+    assert client.get(f"{API}/reports/period", params={"from": "2026-05-01", "to": "2026-04-01"},
+                      headers=NL).json()["error"]["message"] == "De begindatum moet op of vóór de einddatum liggen"
+
+
+def test_settings_language(client):
+    settings = client.get(f"{API}/settings").json()
+    assert settings["language"] == "auto"
+    saved = client.put(f"{API}/settings", json={**settings, "language": "nl"}).json()
+    assert saved["language"] == "nl"
+    assert client.put(f"{API}/settings", json={**settings, "language": "de"}).status_code == 422

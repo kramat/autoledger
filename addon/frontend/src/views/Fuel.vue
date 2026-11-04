@@ -6,6 +6,7 @@ import { clip } from '../attachments'
 import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDateTime, km, money, nowLocalInput, num } from '../format'
+import { t, tn } from '../i18n'
 import { activeVehicles, state, vehicleName } from '../store'
 import { useCrud } from '../useCrud'
 
@@ -13,54 +14,63 @@ const tab = ref<'refuels' | 'odometer'>('refuels')
 const params = () => ({ vehicle_id: state.vehicleId || undefined })
 const allVehicles = computed(() => !state.vehicleId)
 
-const refuels = useCrud<Refuel>('refuels', params, { noun: 'Refuel' })
-const readings = useCrud<OdometerReading>('odometer-readings', params, { noun: 'Odometer reading' })
+const refuels = useCrud<Refuel>('refuels', params, { noun: () => t('fuel.nouns.refuel') })
+const readings = useCrud<OdometerReading>('odometer-readings', params, { noun: () => t('fuel.nouns.reading') })
 
 const refuelColumns = computed<Column<Refuel>[]>(() => [
-  { key: 'ts', label: 'Date', value: (r) => fmtDateTime(r.ts) },
-  ...(allVehicles.value ? [{ key: 'vehicle', label: 'Vehicle', value: (r: Refuel) => vehicleName(r.vehicle_id) }] : []),
-  { key: 'odometer', label: 'Odometer', num: true, value: (r) => km(r.odometer_km) },
-  { key: 'litres', label: 'Litres', num: true, value: (r) => num(r.litres, 2) },
-  { key: 'price', label: 'Price / L', num: true, value: (r) => money(r.price_per_l, 3) },
-  { key: 'total', label: 'Total', num: true, value: (r) => money(r.total) },
-  { key: 'full', label: 'Tank', value: (r) => (r.full_tank ? 'Full' : 'Partial') },
-  { key: 'cons', label: 'L/100 km', num: true, value: (r) => num(r.l_per_100km, 2) },
-  { key: 'station', label: 'Station', wrap: true, value: (r) => r.station ?? '' },
-  { key: 'receipt', label: 'Receipt', value: clip },
+  { key: 'ts', label: t('fuel.columns.date'), value: (r) => fmtDateTime(r.ts) },
+  ...(allVehicles.value
+    ? [{ key: 'vehicle', label: t('fuel.columns.vehicle'), value: (r: Refuel) => vehicleName(r.vehicle_id) }]
+    : []),
+  { key: 'odometer', label: t('fuel.columns.odometer'), num: true, value: (r) => km(r.odometer_km) },
+  { key: 'litres', label: t('fuel.columns.litres'), num: true, value: (r) => num(r.litres, 2) },
+  { key: 'price', label: t('fuel.columns.pricePerL'), num: true, value: (r) => money(r.price_per_l, 3) },
+  { key: 'total', label: t('fuel.columns.total'), num: true, value: (r) => money(r.total) },
+  {
+    key: 'full',
+    label: t('fuel.columns.tank'),
+    value: (r) => (r.full_tank ? t('fuel.columns.full') : t('fuel.columns.partial')),
+  },
+  { key: 'cons', label: t('fuel.columns.consumption'), num: true, value: (r) => num(r.l_per_100km, 2) },
+  { key: 'station', label: t('fuel.columns.station'), wrap: true, value: (r) => r.station ?? '' },
+  { key: 'receipt', label: t('fuel.columns.receipt'), value: clip },
 ])
 
 const readingColumns = computed<Column<OdometerReading>[]>(() => [
-  { key: 'ts', label: 'Date', value: (r) => fmtDateTime(r.ts) },
+  { key: 'ts', label: t('fuel.columns.date'), value: (r) => fmtDateTime(r.ts) },
   ...(allVehicles.value
-    ? [{ key: 'vehicle', label: 'Vehicle', value: (r: OdometerReading) => vehicleName(r.vehicle_id) }]
+    ? [{ key: 'vehicle', label: t('fuel.columns.vehicle'), value: (r: OdometerReading) => vehicleName(r.vehicle_id) }]
     : []),
-  { key: 'odometer', label: 'Odometer', num: true, value: (r) => km(r.odometer_km) },
-  { key: 'note', label: 'Note', wrap: true, value: (r) => r.note ?? '' },
+  { key: 'odometer', label: t('fuel.columns.odometer'), num: true, value: (r) => km(r.odometer_km) },
+  { key: 'note', label: t('fuel.columns.note'), wrap: true, value: (r) => r.note ?? '' },
 ])
 
 const refuelFields = computed<Field[]>(() => [
   vehicleField(),
-  { key: 'ts', label: 'Date and time', type: 'datetime', required: true },
-  { key: 'odometer_km', label: 'Odometer (km)', type: 'number', min: 0, half: true, hint: 'Needed for L/100 km' },
-  { key: 'full_tank', label: 'Filled the tank completely', type: 'checkbox', half: true },
-  { key: 'litres', label: 'Litres', type: 'number', min: 0, half: true },
-  { key: 'total', label: 'Total paid', type: 'number', min: 0, half: true },
+  { key: 'ts', label: t('fuel.fields.ts'), type: 'datetime', required: true },
+  {
+    key: 'odometer_km', label: t('fuel.fields.odometer'), type: 'number', min: 0, half: true,
+    hint: t('fuel.fields.odometerHint'),
+  },
+  { key: 'full_tank', label: t('fuel.fields.fullTank'), type: 'checkbox', half: true },
+  { key: 'litres', label: t('fuel.fields.litres'), type: 'number', min: 0, half: true },
+  { key: 'total', label: t('fuel.fields.total'), type: 'number', min: 0, half: true },
   {
     key: 'price_per_l',
-    label: 'Price per litre',
+    label: t('fuel.fields.pricePerL'),
     type: 'number',
     min: 0,
-    hint: 'Fill in two of litres, total and price per litre. The third is calculated.',
+    hint: t('fuel.fields.pricePerLHint'),
   },
-  { key: 'station', label: 'Station', type: 'text' },
-  { key: 'note', label: 'Note', type: 'textarea' },
+  { key: 'station', label: t('fuel.fields.station'), type: 'text' },
+  { key: 'note', label: t('fuel.fields.note'), type: 'textarea' },
 ])
 
 const readingFields = computed<Field[]>(() => [
   vehicleField(),
-  { key: 'ts', label: 'Date and time', type: 'datetime', required: true },
-  { key: 'odometer_km', label: 'Odometer (km)', type: 'number', min: 0, required: true },
-  { key: 'note', label: 'Note', type: 'textarea' },
+  { key: 'ts', label: t('fuel.fields.ts'), type: 'datetime', required: true },
+  { key: 'odometer_km', label: t('fuel.fields.odometer'), type: 'number', min: 0, required: true },
+  { key: 'note', label: t('fuel.fields.note'), type: 'textarea' },
 ])
 
 const totals = computed(() => ({
@@ -82,14 +92,18 @@ function exportUrl(): string {
 <template>
   <div>
     <div class="page-head">
-      <div class="segmented" role="group" aria-label="Show">
-        <button :class="{ on: tab === 'refuels' }" :aria-pressed="tab === 'refuels'" @click="tab = 'refuels'">Refuels</button>
-        <button :class="{ on: tab === 'odometer' }" :aria-pressed="tab === 'odometer'" @click="tab = 'odometer'">Odometer readings</button>
+      <div class="segmented" role="group" :aria-label="t('fuel.tabs.show')">
+        <button :class="{ on: tab === 'refuels' }" :aria-pressed="tab === 'refuels'" @click="tab = 'refuels'">
+          {{ t('fuel.tabs.refuels') }}
+        </button>
+        <button :class="{ on: tab === 'odometer' }" :aria-pressed="tab === 'odometer'" @click="tab = 'odometer'">
+          {{ t('fuel.tabs.readings') }}
+        </button>
       </div>
       <div class="actions">
-        <a :href="exportUrl()" download><button>Export CSV</button></a>
+        <a :href="exportUrl()" download><button>{{ t('fuel.actions.exportCsv') }}</button></a>
         <button class="primary" :disabled="!activeVehicles.length" @click="add">
-          {{ tab === 'refuels' ? 'Add refuel' : 'Add reading' }}
+          {{ tab === 'refuels' ? t('fuel.actions.addRefuel') : t('fuel.actions.addReading') }}
         </button>
       </div>
     </div>
@@ -97,11 +111,11 @@ function exportUrl(): string {
     <template v-if="tab === 'refuels'">
       <p v-if="refuels.error.value" class="notice error">{{ refuels.error.value }}</p>
       <DataTable :columns="refuelColumns" :rows="refuels.items.value" :loading="refuels.loading.value"
-        empty="No refuels yet." @edit="refuels.openEdit" @delete="refuels.remove">
+        :empty="t('fuel.refuels.empty')" @edit="refuels.openEdit" @delete="refuels.remove">
         <template v-if="refuels.items.value.length" #foot>
           <tr>
             <td :colspan="allVehicles ? 3 : 2">
-              {{ refuels.items.value.length }} {{ refuels.items.value.length === 1 ? 'refuel' : 'refuels' }}
+              {{ tn('fuel.refuels.count', refuels.items.value.length, { n: num(refuels.items.value.length) }) }}
             </td>
             <td class="num">{{ num(totals.litres, 1) }}</td>
             <td></td>
@@ -110,23 +124,21 @@ function exportUrl(): string {
           </tr>
         </template>
       </DataTable>
-      <p class="small muted">
-        L/100 km is calculated from one full tank to the next, including partial refuels in between.
-      </p>
+      <p class="small muted">{{ t('fuel.refuels.consumptionNote') }}</p>
     </template>
 
     <template v-else>
       <p v-if="readings.error.value" class="notice error">{{ readings.error.value }}</p>
       <DataTable :columns="readingColumns" :rows="readings.items.value" :loading="readings.loading.value"
-        empty="No odometer readings yet. Refuels and maintenance with an odometer value count too."
-        @edit="readings.openEdit" @delete="readings.remove" />
+        :empty="t('fuel.readings.empty')" @edit="readings.openEdit" @delete="readings.remove" />
     </template>
 
-    <RecordDialog v-if="refuels.dialog.value" :title="refuels.dialog.value.mode === 'create' ? 'Add refuel' : 'Edit refuel'"
+    <RecordDialog v-if="refuels.dialog.value"
+      :title="refuels.dialog.value.mode === 'create' ? t('fuel.dialogs.addRefuel') : t('fuel.dialogs.editRefuel')"
       :fields="refuelFields" :initial="refuels.dialog.value.initial" :mode="refuels.dialog.value.mode"
       :save="refuels.save" attachments="refuels" @changed="refuels.load" @close="refuels.dialog.value = null" />
     <RecordDialog v-if="readings.dialog.value"
-      :title="readings.dialog.value.mode === 'create' ? 'Add odometer reading' : 'Edit odometer reading'"
+      :title="readings.dialog.value.mode === 'create' ? t('fuel.dialogs.addReading') : t('fuel.dialogs.editReading')"
       :fields="readingFields" :initial="readings.dialog.value.initial" :mode="readings.dialog.value.mode"
       :save="readings.save" @close="readings.dialog.value = null" />
   </div>

@@ -5,6 +5,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ApiError, api, type AttachmentResource } from '../api'
 import { shrink } from '../attachments'
+import { t } from '../i18n'
 import { fromLocalInput, toLocalInput } from '../format'
 import AttachmentList from './AttachmentList.vue'
 import type { Field } from './fields'
@@ -124,8 +125,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         @changed="emit('changed')" />
       <p v-if="message" class="notice error">{{ message }}</p>
       <div class="dialog-actions">
-        <button type="button" @click="emit('close')">Cancel</button>
-        <button type="submit" class="primary" :disabled="busy">{{ mode === 'create' ? 'Add' : 'Save' }}</button>
+        <button type="button" @click="emit('close')">{{ t('common.actions.cancel') }}</button>
+        <button type="submit" class="primary" :disabled="busy">
+          {{ mode === 'create' ? t('common.actions.add') : t('common.actions.save') }}
+        </button>
       </div>
     </form>
   </div>

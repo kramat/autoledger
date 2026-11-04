@@ -1,6 +1,8 @@
 // Typed client for the add-on REST API (docs/api.md).
 // All URLs are relative so they resolve under the Ingress path.
 
+import { lang, type LanguagePreference } from './i18n'
+
 const BASE = 'api/v1'
 
 export interface RecordBase {
@@ -254,6 +256,7 @@ export interface Expense extends RecordBase {
 
 export interface Settings {
   currency: string
+  language: LanguagePreference
   electricity_price: number
   public_charge_price: number
   fuel_prices: { petrol: number; diesel: number; lpg: number }
@@ -469,7 +472,10 @@ function url(path: string, params?: Params): string {
 async function request<T>(method: string, path: string, body?: unknown, params?: Params): Promise<T> {
   const response = await fetch(url(path, params), {
     method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    // Accept-Language: the add-on returns its error messages in the interface language.
+    headers: body === undefined
+      ? { 'Accept-Language': lang.value }
+      : { 'Content-Type': 'application/json', 'Accept-Language': lang.value },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (response.status === 204) return undefined as T
@@ -521,7 +527,7 @@ export const api = {
 async function uploadAttachment(resource: AttachmentResource, recordId: string, file: Blob, filename: string): Promise<Attachment> {
   const response = await fetch(url('/attachments', { resource, record_id: recordId, filename }), {
     method: 'POST',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    headers: { 'Content-Type': file.type || 'application/octet-stream', 'Accept-Language': lang.value },
     body: file,
   })
   const data = await response.json().catch(() => null)

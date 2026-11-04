@@ -2,6 +2,7 @@
 
 import { ref, watch, type Ref } from 'vue'
 import { api, type Resource } from './api'
+import { t } from './i18n'
 import { toast } from './store'
 
 type Params = Record<string, string | number | boolean | null | undefined>
@@ -15,7 +16,8 @@ interface DialogState {
 export function useCrud<T extends { id: string }>(
   resource: Resource,
   params: () => Params,
-  options: { noun: string; afterChange?: () => Promise<void> },
+  // noun: the record type for toasts, a function so it follows the interface language.
+  options: { noun: () => string; afterChange?: () => Promise<void> },
 ) {
   const items = ref([]) as Ref<T[]>
   const loading = ref(true)
@@ -44,7 +46,7 @@ export function useCrud<T extends { id: string }>(
   async function remove(row: T): Promise<void> {
     await api.remove(resource, row.id)
     await changed()
-    toast(`${options.noun} deleted`, 'Undo', async () => {
+    toast(t('common.toast.deleted', { noun: options.noun() }), t('common.actions.undo'), async () => {
       await api.restore(resource, row.id)
       await changed()
     })
@@ -65,7 +67,7 @@ export function useCrud<T extends { id: string }>(
       ? await api.create<T>(resource, data)
       : await api.update<T>(resource, current.id!, data)
     await changed()
-    toast(`${options.noun} ${current.mode === 'create' ? 'added' : 'saved'}`)
+    toast(t(current.mode === 'create' ? 'common.toast.added' : 'common.toast.saved', { noun: options.noun() }))
     return saved
   }
 

@@ -16,6 +16,7 @@ from .api import attachments, data, export, inbox, reports, resources, schedules
 from .auth import auth_middleware
 from .config import Config, load_config
 from .db import make_engine
+from .i18n import language, translate, validation_message
 from .migrate import run_migrations
 from .settings_store import load_token
 
@@ -67,19 +68,21 @@ def create_app(config: Config | None = None) -> FastAPI:
     return app
 
 
-async def _http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     code = _ERROR_CODES.get(exc.status_code, "error")
+    message = translate(str(exc.detail), language(request.headers.get("accept-language")))
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": code, "message": str(exc.detail)}},
+        content={"error": {"code": code, "message": message}},
     )
 
 
-async def _validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    lang = language(request.headers.get("accept-language"))
     fields: dict[str, str] = {}
     for error in exc.errors():
         loc = [str(part) for part in error.get("loc", ()) if part not in ("body", "query", "path")]
-        message = str(error.get("msg", "Invalid value")).removeprefix("Value error, ")
+        message = validation_message(error, lang)
         fields.setdefault(".".join(loc) or "_", message)
     summary_text = "; ".join(fields.values())
     return JSONResponse(

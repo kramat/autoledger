@@ -136,6 +136,6 @@ Each milestone ends with something usable. The manual workflow comes first, so t
 | Lynk battery capacity | 14.1 kWh usable (17.6 kWh gross). An empty-to-full home charge takes ≈ 16.5 kWh, so the starting `kwh_per_pct` is 0.165. |
 | Public charging | 1–2 times per month. These go through the review inbox; no charge-card integration is needed. |
 | Business/private tagging | Not needed. It has been removed from the scope. |
-| GUI language | English first. Dutch comes later. |
+| GUI language | English first. Dutch added in 0.6.0 (GUI, API messages, Collector). |
 | Old data | There is history to import. In M1 it can be entered with back-dated entries; CSV import follows in M4. |
 | Repository | A new repo, `kramat/autoledger`. `HA_AutoLedger` stays as it is. |

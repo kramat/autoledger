@@ -2,6 +2,7 @@
 // CSV import: pick a file, check the column mapping on a preview, then import the valid rows.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, type ImportPreview, type ImportResource } from '../api'
+import { t, tn } from '../i18n'
 import { IMPORT_FIELDS, IMPORT_RESOURCES } from '../labels'
 import { activeVehicles } from '../store'
 import { defaultVehicleId } from './fields'
@@ -84,7 +85,7 @@ const previewColumns = computed(() =>
 
 function show(value: unknown): string {
   if (value == null) return ''
-  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  if (typeof value === 'boolean') return value ? t('importer.yes') : t('importer.no')
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return value.slice(0, 16).replace('T', ' ')
   return String(value)
 }
@@ -98,71 +99,70 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div class="overlay">
-    <div class="dialog wide" role="dialog" aria-modal="true" aria-label="Import CSV">
-      <h2>Import CSV</h2>
-      <p class="small muted" style="margin: 4px 0 0">
-        From a spreadsheet or another app. Nothing is saved until you click Import; rows that are already in AutoLedger
-        are skipped.
-      </p>
+    <div class="dialog wide" role="dialog" aria-modal="true" :aria-label="t('importer.title')">
+      <h2>{{ t('importer.title') }}</h2>
+      <p class="small muted" style="margin: 4px 0 0">{{ t('importer.intro') }}</p>
       <div class="form-grid">
         <label class="field half">
-          <span>What is in the file</span>
+          <span>{{ t('importer.fields.resource') }}</span>
           <select v-model="resource" @change="changeResource">
             <option v-for="r in IMPORT_RESOURCES" :key="String(r.value)" :value="r.value">{{ r.label }}</option>
           </select>
         </label>
         <label class="field half">
-          <span>Vehicle</span>
+          <span>{{ t('importer.fields.vehicle') }}</span>
           <select v-model="vehicleId" @change="run()">
             <option v-for="v in activeVehicles" :key="v.id" :value="v.id">{{ v.name }}</option>
           </select>
         </label>
         <label class="field">
-          <span>CSV file</span>
+          <span>{{ t('importer.fields.file') }}</span>
           <input type="file" accept=".csv,.txt,text/csv" @change="pick" />
         </label>
       </div>
 
       <template v-if="preview">
-        <h3 style="margin: 4px 0 8px">Columns</h3>
+        <h3 style="margin: 4px 0 8px">{{ t('importer.columns') }}</h3>
         <div class="form-grid" style="margin-top: 0">
           <label v-for="f in preview.fields" :key="f.name" class="field half">
             <span>{{ IMPORT_FIELDS[f.name] ?? f.name }}<template v-if="f.required"> *</template></span>
             <select :value="mapping[f.name] ?? ''" @change="setColumn(f.name, ($event.target as HTMLSelectElement).value)">
-              <option value="">— not in the file —</option>
+              <option value="">{{ t('importer.notInFile') }}</option>
               <option v-for="c in preview.columns" :key="c" :value="c">{{ c }}</option>
             </select>
           </label>
           <label class="field half">
-            <span>Decimal separator</span>
+            <span>{{ t('importer.decimal.label') }}</span>
             <select v-model="decimal" @change="run()">
-              <option value=",">Comma (12,50)</option>
-              <option value=".">Point (12.50)</option>
+              <option value=",">{{ t('importer.decimal.comma') }}</option>
+              <option value=".">{{ t('importer.decimal.point') }}</option>
             </select>
           </label>
           <label class="field half">
-            <span>Dates</span>
+            <span>{{ t('importer.dates.label') }}</span>
             <select v-model="dateOrder" @change="run()">
-              <option value="dmy">Day first (31-12-2025)</option>
-              <option value="mdy">Month first (12/31/2025)</option>
-              <option value="ymd">Year first (2025-12-31)</option>
+              <option value="dmy">{{ t('importer.dates.dmy') }}</option>
+              <option value="mdy">{{ t('importer.dates.mdy') }}</option>
+              <option value="ymd">{{ t('importer.dates.ymd') }}</option>
             </select>
           </label>
         </div>
 
         <p class="small" style="margin: 0 0 8px">
-          {{ fileName }}: {{ preview.total_rows }} rows · <b>{{ preview.counts.ok }} to import</b>
-          <template v-if="preview.counts.duplicate"> · {{ preview.counts.duplicate }} already there</template>
-          <template v-if="preview.counts.error"> · {{ preview.counts.error }} with errors</template>
-          <template v-if="preview.total_rows > preview.rows.length"> (first {{ preview.rows.length }} shown)</template>
+          {{ fileName }}: {{ tn('importer.summary.rows', preview.total_rows) }} ·
+          <b>{{ t('importer.summary.toImport', { n: preview.counts.ok }) }}</b>
+          <template v-if="preview.counts.duplicate"> · {{ t('importer.summary.duplicates', { n: preview.counts.duplicate }) }}</template>
+          <template v-if="preview.counts.error"> · {{ t('importer.summary.errors', { n: preview.counts.error }) }}</template>
+          <template v-if="preview.total_rows > preview.rows.length">
+            {{ t('importer.summary.firstShown', { n: preview.rows.length }) }}</template>
         </p>
         <div class="table-wrap preview">
           <table>
             <thead>
               <tr>
-                <th scope="col">Line</th>
+                <th scope="col">{{ t('importer.table.line') }}</th>
                 <th v-for="f in previewColumns" :key="f" scope="col">{{ IMPORT_FIELDS[f] ?? f }}</th>
-                <th scope="col">Status</th>
+                <th scope="col">{{ t('importer.table.status') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -170,8 +170,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 <td class="num">{{ r.line }}</td>
                 <td v-for="f in previewColumns" :key="f">{{ show(r.values[f]) }}</td>
                 <td class="wrap">
-                  <span v-if="r.status === 'ok'" class="badge ok">✓ ok</span>
-                  <span v-else-if="r.status === 'duplicate'" class="badge">= already there</span>
+                  <span v-if="r.status === 'ok'" class="badge ok">{{ t('importer.table.ok') }}</span>
+                  <span v-else-if="r.status === 'duplicate'" class="badge">{{ t('importer.table.duplicate') }}</span>
                   <span v-else class="error">⛔ {{ r.error }}</span>
                 </td>
               </tr>
@@ -181,11 +181,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </template>
 
       <p v-if="error" class="notice error">{{ error }}</p>
-      <p v-if="!activeVehicles.length" class="notice">Add a vehicle first.</p>
+      <p v-if="!activeVehicles.length" class="notice">{{ t('importer.noVehicle') }}</p>
       <div class="dialog-actions">
-        <button type="button" @click="emit('close')">Cancel</button>
+        <button type="button" @click="emit('close')">{{ t('common.actions.cancel') }}</button>
         <button type="button" class="primary" :disabled="busy || !preview || !preview.counts.ok" @click="run(true)">
-          Import {{ preview?.counts.ok ?? '' }} rows
+          {{ preview ? tn('importer.importRows', preview.counts.ok) : t('importer.import') }}
         </button>
       </div>
     </div>

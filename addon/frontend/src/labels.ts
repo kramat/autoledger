@@ -1,115 +1,49 @@
-// Display labels for the enum values the API uses.
+// Display labels for the enum values the API uses. Labels are getters, so they
+// follow the interface language wherever an option list is shown.
+
+import { t, type Key } from './i18n'
 
 export interface Option {
   value: string | null
-  label: string
+  readonly label: string
 }
 
-export const VEHICLE_TYPES: Option[] = [
-  { value: 'ICE', label: 'Fuel (ICE)' },
-  { value: 'PHEV', label: 'Plug-in hybrid (PHEV)' },
-  { value: 'BEV', label: 'Electric (BEV)' },
-]
-
-export const FUEL_TYPES: Option[] = [
-  { value: 'petrol', label: 'Petrol' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'lpg', label: 'LPG' },
-  { value: 'none', label: 'None' },
-]
-
-export const MAINTENANCE_CATEGORIES: Option[] = [
-  { value: 'service', label: 'Service' },
-  { value: 'inspection', label: 'Inspection (APK)' },
-  { value: 'tyres', label: 'Tyres' },
-  { value: 'repair', label: 'Repair' },
-  { value: 'battery', label: 'Battery' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'other', label: 'Other' },
-]
-
-export const EXPENSE_CATEGORIES: Option[] = [
-  { value: 'insurance', label: 'Insurance' },
-  { value: 'road_tax', label: 'Road tax (MRB)' },
-  { value: 'parking', label: 'Parking' },
-  { value: 'tolls', label: 'Tolls' },
-  { value: 'car_wash', label: 'Car wash' },
-  { value: 'fine', label: 'Fine' },
-  { value: 'accessories', label: 'Accessories' },
-  { value: 'lease', label: 'Lease' },
-  { value: 'subscription', label: 'Subscription' },
-  { value: 'other', label: 'Other' },
-]
-
-export const RECURRENCES: Option[] = [
-  { value: null, label: 'One-off' },
-  { value: 'monthly', label: 'Every month' },
-  { value: 'quarterly', label: 'Every quarter' },
-  { value: 'yearly', label: 'Every year' },
-]
-
-export const CHARGE_KINDS: Option[] = [
-  { value: 'home', label: 'Home' },
-  { value: 'public', label: 'Public' },
-  { value: 'manual', label: 'Other' },
-]
-
-export const PRICE_MODES: Option[] = [
-  { value: 'per_kwh', label: 'Price per kWh' },
-  { value: 'total', label: 'Total amount' },
-  { value: 'free', label: 'Free' },
-  { value: 'samples', label: 'Live electricity price (home charger)' },
-]
-
-export const TRIP_KINDS: Option[] = [
-  { value: 'one_way', label: 'One way' },
-  { value: 'round_trip', label: 'Round trip' },
-]
-
-export const FACTOR_MODES: Option[] = [
-  { value: 'manual', label: 'set by you' },
-  { value: 'learned', label: 'learned from home charges' },
-  { value: 'default', label: 'from battery capacity' },
-]
-
-export const DUE_STATUSES: Record<string, string> = {
-  ok: '✓ On track',
-  soon: '⚠ Due soon',
-  overdue: '⛔ Overdue',
-  unknown: '? Not known yet',
+function options(group: string, values: (string | null)[], keyOf: (v: string | null) => string = (v) => String(v)): Option[] {
+  return values.map((value) => ({
+    value,
+    get label() {
+      return t(`common.labels.${group}.${keyOf(value)}` as Key)
+    },
+  }))
 }
 
-export const IMPORT_RESOURCES: Option[] = [
-  { value: 'refuels', label: 'Refuels' },
-  { value: 'maintenance', label: 'Maintenance' },
-  { value: 'odometer-readings', label: 'Odometer readings' },
-  { value: 'expenses', label: 'Other costs (one-off)' },
-]
-
-export const IMPORT_FIELDS: Record<string, string> = {
-  ts: 'Date (and time)',
-  date: 'Date',
-  litres: 'Litres',
-  price_per_l: 'Price per litre',
-  total: 'Total paid',
-  odometer_km: 'Odometer (km)',
-  full_tank: 'Full tank',
-  station: 'Station',
-  note: 'Note',
-  category: 'Category',
-  description: 'Description',
-  garage: 'Garage',
-  cost: 'Cost',
-  amount: 'Amount',
+function record(group: string, keys: string[]): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const key of keys) {
+    Object.defineProperty(result, key, { enumerable: true, get: () => t(`common.labels.${group}.${key}` as Key) })
+  }
+  return result
 }
 
-export const REVIEW_REASONS: Record<string, string> = {
-  refuel_price: 'Refuel detected: check the litres and enter what you paid',
-  public_charge_price: 'Charge away from home: enter what you paid',
-  possible_engine_charge: 'Battery went up while driving: public charge, or charged by the engine?',
-  charge_without_vehicle: 'Home charge without a vehicle: which car was it?',
-  rejected_event: 'The collector sent data that could not be processed',
-}
+export const VEHICLE_TYPES = options('vehicleTypes', ['ICE', 'PHEV', 'BEV'])
+export const FUEL_TYPES = options('fuelTypes', ['petrol', 'diesel', 'lpg', 'none'])
+export const MAINTENANCE_CATEGORIES = options('maintenanceCategories',
+  ['service', 'inspection', 'tyres', 'repair', 'battery', 'cleaning', 'other'])
+export const EXPENSE_CATEGORIES = options('expenseCategories',
+  ['insurance', 'road_tax', 'parking', 'tolls', 'car_wash', 'fine', 'accessories', 'lease', 'subscription', 'other'])
+export const RECURRENCES = options('recurrences', [null, 'monthly', 'quarterly', 'yearly'], (v) => v ?? 'once')
+export const CHARGE_KINDS = options('chargeKinds', ['home', 'public', 'manual'])
+export const PRICE_MODES = options('priceModes', ['per_kwh', 'total', 'free', 'samples'])
+export const TRIP_KINDS = options('tripKinds', ['one_way', 'round_trip'])
+export const FACTOR_MODES = options('factorModes', ['manual', 'learned', 'default'])
+export const DUE_STATUSES = record('dueStatuses', ['ok', 'soon', 'overdue', 'unknown'])
+export const IMPORT_RESOURCES = options('importResources',
+  ['refuels', 'maintenance', 'odometer-readings', 'expenses'], (v) => (v === 'odometer-readings' ? 'odometerReadings' : String(v)))
+export const IMPORT_FIELDS = record('importFields', ['ts', 'date', 'litres', 'price_per_l', 'total', 'odometer_km',
+  'full_tank', 'station', 'note', 'category', 'description', 'garage', 'cost', 'amount'])
+export const REVIEW_REASONS = record('reviewReasons', ['refuel_price', 'public_charge_price', 'possible_engine_charge',
+  'charge_without_vehicle', 'rejected_event'])
+export const LANGUAGES = options('languages', ['auto', 'en', 'nl'])
 
 export function label(options: Option[], value: string | null | undefined): string {
   return options.find((o) => o.value === (value ?? null))?.label ?? value ?? '—'

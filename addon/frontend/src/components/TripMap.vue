@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Trip } from '../api'
 import { fmtDateTime, money, num } from '../format'
+import { lang, t } from '../i18n'
 
 const props = defineProps<{ trips: Trip[]; selected?: string | null }>()
 const emit = defineEmits<{ select: [trip: Trip] }>()
@@ -22,7 +23,7 @@ function escape(text: string): string {
 }
 
 function place(address: string | null, zone: string | null): string {
-  return escape(address ?? zone ?? 'unknown place')
+  return escape(address ?? zone ?? t('trips.map.unknownPlace'))
 }
 
 function draw(): void {
@@ -77,6 +78,7 @@ onMounted(() => {
 })
 
 watch(() => [props.trips, props.selected], draw, { deep: true })
+watch(lang, draw)
 
 onBeforeUnmount(() => {
   map?.remove()
@@ -86,9 +88,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="trip-map">
-    <div ref="el" class="trip-map-canvas" role="img" aria-label="Map of trip start and end points" />
+    <div ref="el" class="trip-map-canvas" role="img" :aria-label="t('trips.map.ariaLabel')" />
     <p class="small muted legend">
-      <span class="dot hollow" /> start <span class="dot" /> end · lines are straight, the route is not recorded
+      <span class="dot hollow" /> {{ t('trips.map.start') }} <span class="dot" /> {{ t('trips.map.end') }} · {{ t('trips.map.straightLines') }}
     </p>
   </div>
 </template>

@@ -1,0 +1,81 @@
+// Texts of the settings area.
+
+export default {
+  general: {
+    title: 'General',
+    language: 'Language',
+  },
+  prices: {
+    title: 'Prices and currency',
+    hint: 'Defaults used when a price is not known, also by the Collector.',
+    currency: 'Currency (ISO code)',
+    electricity: 'Electricity, fallback price per kWh',
+    publicCharge: 'Public charging, default price per kWh',
+    petrol: 'Petrol, default price per litre',
+    diesel: 'Diesel, default price per litre',
+    lpg: 'LPG, default price per litre',
+  },
+  toast: {
+    saved: 'Settings saved',
+    notSaved: 'Not saved: {error}',
+  },
+  export: {
+    title: 'Export',
+    hint: 'All records in one Excel workbook (a sheet per type), or one CSV file per type.',
+    workbook: 'All records (XLSX)',
+    resources: {
+      refuels: 'Refuels',
+      odometerReadings: 'Odometer readings',
+      charges: 'Charges',
+      idleRecords: 'Climate & standby',
+      maintenanceSchedules: 'Maintenance schedules',
+      expenses: 'Other costs',
+    },
+  },
+  import: {
+    title: 'Import',
+    hint: 'Refuels, maintenance, odometer readings or other costs from a CSV file, for example history from a spreadsheet. You check the columns on a preview before anything is saved.',
+    button: 'Import CSV…',
+    imported: { one: '{n} record imported', other: '{n} records imported' },
+  },
+  backup: {
+    title: 'Backup',
+    hint: "A full JSON backup of everything in AutoLedger, to move to another installation. Home Assistant backups include the add-on's database and receipt files as well. The API token is not in the file.",
+    withFiles: 'Include receipt photos and invoices',
+    withFilesHint: 'Makes the file larger. Without them, a restore keeps the list of attachments but not the files.',
+    download: 'Download backup',
+  },
+  restore: {
+    title: 'Restore',
+    file: 'Backup file',
+    mode: 'How',
+    modes: {
+      empty: 'Into this add-on while it is still empty',
+      merge: 'Add what is missing, keep what is here',
+    },
+    copyFirst: 'The current database is copied to /data/backups first.',
+    button: 'Restore',
+    done: 'Backup restored',
+    notJson: 'This file is not a JSON backup.',
+    restored: { one: 'Restored {n} record.', other: 'Restored {n} records.' },
+    skipped: { one: '{n} was already here.', other: '{n} were already here.' },
+    files: { one: 'Also restored {n} receipt file.', other: 'Also restored {n} receipt files.' },
+  },
+  token: {
+    title: 'API token',
+    hint: 'The AutoLedger Collector integration and your own scripts use this token. Keep it private.',
+    show: 'Show',
+    hide: 'Hide',
+    copy: 'Copy',
+    create: 'Create new token',
+    confirm: 'Click again to replace the token',
+    created: 'New token created. Update it wherever the old one was used.',
+    copied: 'Token copied',
+  },
+  collector: {
+    title: 'Collector',
+    lastData: 'Last data from the AutoLedger Collector: {time}.',
+    noData: 'The AutoLedger Collector has not sent any data yet. Install it via HACS and add the integration.',
+  },
+  about: '{name} {version} · API v{apiVersion} · Time zone {timezone}',
+}

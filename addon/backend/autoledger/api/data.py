@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import __version__, models, schemas
+from ..i18n import language, translate, validation_message
 from ..book import today_local
 from ..db import UTCDateTime, get_db, utcnow
 from ..importer import FIELDS, Options, convert_row, guess_date_order, guess_decimal, guess_mapping, read_csv
@@ -225,6 +226,7 @@ def import_csv(
 ):
     """Preview a CSV file (default), or import its valid rows with ``?commit=true``."""
     tz = request.app.state.config.tz
+    lang = language(request.headers.get("accept-language"))
     check_vehicle(db, {"vehicle_id": body.vehicle_id})
     header, rows, delimiter = read_csv(body.content, body.delimiter)
     if not header:
@@ -259,7 +261,7 @@ def import_csv(
                 status = "duplicate"
         except ValueError as err:  # includes pydantic's ValidationError
             status = "error"
-            error = _message(err)
+            error = _message(err, lang)
         counts[status] += 1
         if status == "ok":
             valid.append(record)
@@ -291,12 +293,12 @@ def import_csv(
     }
 
 
-def _message(err: ValueError) -> str:
+def _message(err: ValueError, lang: str) -> str:
     if isinstance(err, ValidationError):
         parts = []
         for e in err.errors():
             loc = ".".join(str(p) for p in e.get("loc", ()))
-            msg = str(e.get("msg", "invalid")).removeprefix("Value error, ")
+            msg = validation_message(e, lang)
             parts.append(f"{loc}: {msg}" if loc else msg)
         return "; ".join(parts)
-    return str(err)
+    return translate(str(err), lang)

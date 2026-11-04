@@ -6,40 +6,46 @@ import { clip } from '../attachments'
 import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDate, isoDate, money } from '../format'
+import { t } from '../i18n'
 import { EXPENSE_CATEGORIES, label, RECURRENCES } from '../labels'
 import { activeVehicles, state, vehicleName } from '../store'
 import { useCrud } from '../useCrud'
 
 const params = () => ({ vehicle_id: state.vehicleId || undefined })
-const crud = useCrud<Expense>('expenses', params, { noun: 'Expense' })
+const crud = useCrud<Expense>('expenses', params, { noun: () => t('costs.noun') })
 
 function repeats(e: Expense): string {
-  if (!e.recurrence) return 'One-off'
   const base = label(RECURRENCES, e.recurrence)
-  return e.end_date ? `${base} until ${fmtDate(e.end_date)}` : base
+  if (!e.recurrence || !e.end_date) return base
+  return t('costs.repeatsUntil', { recurrence: base, date: fmtDate(e.end_date) })
 }
 
 const columns = computed<Column<Expense>[]>(() => [
-  { key: 'date', label: 'Date', value: (e) => fmtDate(e.date) },
-  ...(!state.vehicleId ? [{ key: 'vehicle', label: 'Vehicle', value: (e: Expense) => vehicleName(e.vehicle_id) }] : []),
-  { key: 'category', label: 'Category', value: (e) => label(EXPENSE_CATEGORIES, e.category) },
-  { key: 'amount', label: 'Amount', num: true, value: (e) => money(e.amount) },
-  { key: 'repeats', label: 'Repeats', value: repeats },
-  { key: 'note', label: 'Note', wrap: true, value: (e) => e.note ?? '' },
-  { key: 'receipt', label: 'Receipt', value: clip },
+  { key: 'date', label: t('costs.columns.date'), value: (e) => fmtDate(e.date) },
+  ...(!state.vehicleId
+    ? [{ key: 'vehicle', label: t('costs.columns.vehicle'), value: (e: Expense) => vehicleName(e.vehicle_id) }]
+    : []),
+  { key: 'category', label: t('costs.columns.category'), value: (e) => label(EXPENSE_CATEGORIES, e.category) },
+  { key: 'amount', label: t('costs.columns.amount'), num: true, value: (e) => money(e.amount) },
+  { key: 'repeats', label: t('costs.columns.repeats'), value: repeats },
+  { key: 'note', label: t('costs.columns.note'), wrap: true, value: (e) => e.note ?? '' },
+  { key: 'receipt', label: t('costs.columns.receipt'), value: clip },
 ])
 
 const recurring = (values: Record<string, unknown>) => values.recurrence != null
 
 const fields = computed<Field[]>(() => [
   vehicleField(),
-  { key: 'category', label: 'Category', type: 'select', options: EXPENSE_CATEGORIES, required: true, half: true },
-  { key: 'amount', label: 'Amount', type: 'number', min: 0, required: true, half: true,
-    hint: 'For a recurring cost: the amount per period, e.g. per year' },
-  { key: 'recurrence', label: 'Repeats', type: 'select', options: RECURRENCES, half: true },
-  { key: 'date', label: 'Date (start date when recurring)', type: 'date', required: true, half: true },
-  { key: 'end_date', label: 'Ends on', type: 'date', show: recurring, hint: 'Leave empty if it is still running' },
-  { key: 'note', label: 'Note', type: 'textarea' },
+  {
+    key: 'category', label: t('costs.fields.category'), type: 'select', options: EXPENSE_CATEGORIES, required: true,
+    half: true,
+  },
+  { key: 'amount', label: t('costs.fields.amount'), type: 'number', min: 0, required: true, half: true,
+    hint: t('costs.fields.amountHint') },
+  { key: 'recurrence', label: t('costs.fields.recurrence'), type: 'select', options: RECURRENCES, half: true },
+  { key: 'date', label: t('costs.fields.date'), type: 'date', required: true, half: true },
+  { key: 'end_date', label: t('costs.fields.endDate'), type: 'date', show: recurring, hint: t('costs.fields.endDateHint') },
+  { key: 'note', label: t('costs.fields.note'), type: 'textarea' },
 ])
 
 function add(): void {
@@ -50,21 +56,18 @@ function add(): void {
 <template>
   <div>
     <div class="page-head">
-      <h2>Other costs</h2>
+      <h2>{{ t('costs.title') }}</h2>
       <div class="actions">
-        <a :href="api.exportUrl('expenses', params())" download><button>Export CSV</button></a>
-        <button class="primary" :disabled="!activeVehicles.length" @click="add">Add cost</button>
+        <a :href="api.exportUrl('expenses', params())" download><button>{{ t('costs.actions.exportCsv') }}</button></a>
+        <button class="primary" :disabled="!activeVehicles.length" @click="add">{{ t('costs.actions.add') }}</button>
       </div>
     </div>
     <p v-if="crud.error.value" class="notice error">{{ crud.error.value }}</p>
     <DataTable :columns="columns" :rows="crud.items.value" :loading="crud.loading.value"
-      empty="No costs yet. Add insurance, road tax, parking, tolls and other costs here." @edit="crud.openEdit"
-      @delete="crud.remove" />
-    <p class="small muted">
-      Recurring costs are spread over the months they cover: a yearly insurance of 600 counts as 50 per month, up to
-      the current month.
-    </p>
-    <RecordDialog v-if="crud.dialog.value" :title="crud.dialog.value.mode === 'create' ? 'Add cost' : 'Edit cost'"
+      :empty="t('costs.empty')" @edit="crud.openEdit" @delete="crud.remove" />
+    <p class="small muted">{{ t('costs.spreadNote') }}</p>
+    <RecordDialog v-if="crud.dialog.value"
+      :title="crud.dialog.value.mode === 'create' ? t('costs.dialogs.add') : t('costs.dialogs.edit')"
       :fields="fields" :initial="crud.dialog.value.initial" :mode="crud.dialog.value.mode" :save="crud.save"
       attachments="expenses" @changed="crud.load" @close="crud.dialog.value = null" />
   </div>

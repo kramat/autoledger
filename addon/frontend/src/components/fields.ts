@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import type { Option } from '../labels'
 import { activeVehicles, state } from '../store'
 
@@ -18,7 +19,7 @@ export interface Field {
 export function vehicleField(): Field {
   return {
     key: 'vehicle_id',
-    label: 'Vehicle',
+    label: t('common.app.filters.vehicle'),
     type: 'select',
     required: true,
     options: activeVehicles.value.map((v) => ({ value: v.id, label: v.name })),

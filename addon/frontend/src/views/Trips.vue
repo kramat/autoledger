@@ -6,58 +6,70 @@ import RecordDialog from '../components/RecordDialog.vue'
 import TripMap from '../components/TripMap.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDate, fmtDateTime, fromLocalInput, money, nowLocalInput, num, toLocalInput } from '../format'
+import { locale, t, tn } from '../i18n'
 import { FACTOR_MODES, label, TRIP_KINDS } from '../labels'
 import { activeVehicles, periodRange, state, toast, vehicleName } from '../store'
 import { useCrud } from '../useCrud'
 
 const params = () => ({ vehicle_id: state.vehicleId || undefined, ...periodRange() })
-const trips = useCrud<Trip>('trips', params, { noun: 'Trip' })
-const idle = useCrud<IdleRecord>('idle-records', params, { noun: 'Record' })
+const trips = useCrud<Trip>('trips', params, { noun: () => t('trips.nouns.trip') })
+const idle = useCrud<IdleRecord>('idle-records', params, { noun: () => t('trips.nouns.record') })
 const view = ref<'list' | 'map'>('list')
 const detailId = ref<string | null>(null)
-const detail = computed(() => trips.items.value.find((t) => t.id === detailId.value) ?? null)
+const detail = computed(() => trips.items.value.find((trip) => trip.id === detailId.value) ?? null)
 
 function time(value: string): string {
-  return new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return new Date(value).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 function place(address: string | null, zone: string | null): string {
   return address ?? zone ?? '—'
 }
 
-function route(t: Trip): string {
-  const from = place(t.start_address, t.start_zone)
-  if (t.kind === 'round_trip') return `⟲ ${t.start_zone ?? from}`
-  return `${from} → ${place(t.end_address, t.end_zone)}`
+function route(trip: Trip): string {
+  const from = place(trip.start_address, trip.start_zone)
+  if (trip.kind === 'round_trip') return `⟲ ${trip.start_zone ?? from}`
+  return `${from} → ${place(trip.end_address, trip.end_zone)}`
 }
 
-function fuel(t: Trip): string {
-  const litres = t.costing?.fuel_l ?? t.fuel_l
+function fuel(trip: Trip): string {
+  const litres = trip.costing?.fuel_l ?? trip.fuel_l
   if (!litres) return '—'
-  return `${num(litres, 1)}${t.costing?.fuel_reconciled ? ' ✓' : ''}`
+  return `${num(litres, 1)}${trip.costing?.fuel_reconciled ? ' ✓' : ''}`
 }
 
-function perKm(t: Trip): string {
-  return t.costing && t.distance_km >= 1 ? money(t.costing.cost / t.distance_km, 3) : '—'
+function perKm(trip: Trip): string {
+  return trip.costing && trip.distance_km >= 1 ? money(trip.costing.cost / trip.distance_km, 3) : '—'
+}
+
+const DISTANCE_SOURCE_KEYS = {
+  trip_meter: 'trips.detail.distanceSources.trip_meter',
+  odometer: 'trips.detail.distanceSources.odometer',
+  manual: 'trips.detail.distanceSources.manual',
+} as const
+
+function distanceSource(trip: Trip): string {
+  const key = DISTANCE_SOURCE_KEYS[trip.distance_source] as (typeof DISTANCE_SOURCE_KEYS)[keyof typeof DISTANCE_SOURCE_KEYS] | undefined
+  return key ? t(key) : trip.distance_source
 }
 
 const columns = computed<Column<Trip>[]>(() => [
-  { key: 'date', label: 'Date', value: (t) => `${fmtDate(t.start_ts)} ${t.start_ts_estimated ? '~' : ''}${time(t.start_ts)}–${time(t.end_ts)}` },
-  ...(!state.vehicleId ? [{ key: 'vehicle', label: 'Vehicle', value: (t: Trip) => vehicleName(t.vehicle_id) }] : []),
-  { key: 'route', label: 'From → to', wrap: true, value: route },
-  { key: 'km', label: 'km', num: true, value: (t) => num(t.distance_km, 1) },
-  { key: 'kwh', label: 'kWh', num: true, value: (t) => (t.costing?.energy_kwh ? num(t.costing.energy_kwh, 2) : '—') },
+  { key: 'date', label: t('trips.columns.date'), value: (trip) => `${fmtDate(trip.start_ts)} ${trip.start_ts_estimated ? '~' : ''}${time(trip.start_ts)}–${time(trip.end_ts)}` },
+  ...(!state.vehicleId ? [{ key: 'vehicle', label: t('common.app.filters.vehicle'), value: (trip: Trip) => vehicleName(trip.vehicle_id) }] : []),
+  { key: 'route', label: t('trips.columns.route'), wrap: true, value: route },
+  { key: 'km', label: 'km', num: true, value: (trip) => num(trip.distance_km, 1) },
+  { key: 'kwh', label: 'kWh', num: true, value: (trip) => (trip.costing?.energy_kwh ? num(trip.costing.energy_kwh, 2) : '—') },
   { key: 'fuel', label: 'L', num: true, value: fuel },
-  { key: 'cost', label: 'Cost', num: true, value: (t) => money(t.costing?.cost) },
-  { key: 'per_km', label: 'Per km', num: true, value: perKm },
+  { key: 'cost', label: t('trips.columns.cost'), num: true, value: (trip) => money(trip.costing?.cost) },
+  { key: 'per_km', label: t('trips.columns.perKm'), num: true, value: perKm },
 ])
 
 const totals = computed(() => {
   const list = trips.items.value
-  const km = list.reduce((s, t) => s + t.distance_km, 0)
-  const kwh = list.reduce((s, t) => s + Math.max(t.costing?.energy_kwh ?? 0, 0), 0)
-  const litres = list.reduce((s, t) => s + (t.costing?.fuel_l ?? 0), 0)
-  const cost = list.reduce((s, t) => s + (t.costing?.cost ?? 0), 0)
+  const km = list.reduce((s, trip) => s + trip.distance_km, 0)
+  const kwh = list.reduce((s, trip) => s + Math.max(trip.costing?.energy_kwh ?? 0, 0), 0)
+  const litres = list.reduce((s, trip) => s + (trip.costing?.fuel_l ?? 0), 0)
+  const cost = list.reduce((s, trip) => s + (trip.costing?.cost ?? 0), 0)
   return { km, kwh, litres, cost }
 })
 
@@ -67,39 +79,39 @@ const idleTotals = computed(() => ({
 }))
 
 const idleColumns = computed<Column<IdleRecord>[]>(() => [
-  { key: 'when', label: 'Parked', value: (r) => `${fmtDateTime(r.start_ts)} – ${time(r.end_ts)}` },
-  ...(!state.vehicleId ? [{ key: 'vehicle', label: 'Vehicle', value: (r: IdleRecord) => vehicleName(r.vehicle_id) }] : []),
-  { key: 'zone', label: 'Where', value: (r) => r.zone ?? '—' },
-  { key: 'battery', label: 'Battery', num: true, value: (r) => (r.battery_used_pct ? `−${num(r.battery_used_pct, 1)} %` : '—') },
+  { key: 'when', label: t('trips.idle.columns.parked'), value: (r) => `${fmtDateTime(r.start_ts)} – ${time(r.end_ts)}` },
+  ...(!state.vehicleId ? [{ key: 'vehicle', label: t('common.app.filters.vehicle'), value: (r: IdleRecord) => vehicleName(r.vehicle_id) }] : []),
+  { key: 'zone', label: t('trips.idle.columns.where'), value: (r) => r.zone ?? '—' },
+  { key: 'battery', label: t('trips.idle.columns.battery'), num: true, value: (r) => (r.battery_used_pct ? `−${num(r.battery_used_pct, 1)} %` : '—') },
   { key: 'kwh', label: 'kWh', num: true, value: (r) => (r.costing?.energy_kwh ? num(r.costing.energy_kwh, 2) : '—') },
   { key: 'fuel', label: 'L', num: true, value: (r) => (r.fuel_l ? num(r.fuel_l, 1) : '—') },
-  { key: 'cost', label: 'Cost', num: true, value: (r) => money(r.costing?.cost) },
+  { key: 'cost', label: t('trips.idle.columns.cost'), num: true, value: (r) => money(r.costing?.cost) },
 ])
 
 const tripFields = computed<Field[]>(() => [
   vehicleField(),
-  { key: 'start_ts', label: 'Start', type: 'datetime', required: true, half: true },
-  { key: 'end_ts', label: 'End', type: 'datetime', required: true, half: true },
-  { key: 'start_address', label: 'From', type: 'text', half: true },
-  { key: 'end_address', label: 'To', type: 'text', half: true },
-  { key: 'kind', label: 'Kind', type: 'select', options: TRIP_KINDS, half: true },
-  { key: 'distance_km', label: 'Distance (km)', type: 'number', min: 0, required: true, half: true },
-  { key: 'battery_start_pct', label: 'Battery at start (%)', type: 'number', min: 0, half: true },
-  { key: 'battery_end_pct', label: 'Battery at end (%)', type: 'number', min: 0, half: true },
-  { key: 'energy_kwh', label: 'Electricity (kWh)', type: 'number', half: true,
-    hint: 'Leave empty to derive it from the battery % used.' },
-  { key: 'fuel_l', label: 'Fuel (L)', type: 'number', min: 0, half: true },
-  { key: 'note', label: 'Note', type: 'textarea' },
+  { key: 'start_ts', label: t('trips.fields.start'), type: 'datetime', required: true, half: true },
+  { key: 'end_ts', label: t('trips.fields.end'), type: 'datetime', required: true, half: true },
+  { key: 'start_address', label: t('trips.fields.from'), type: 'text', half: true },
+  { key: 'end_address', label: t('trips.fields.to'), type: 'text', half: true },
+  { key: 'kind', label: t('trips.fields.kind'), type: 'select', options: TRIP_KINDS, half: true },
+  { key: 'distance_km', label: t('trips.fields.distance'), type: 'number', min: 0, required: true, half: true },
+  { key: 'battery_start_pct', label: t('trips.fields.batteryStart'), type: 'number', min: 0, half: true },
+  { key: 'battery_end_pct', label: t('trips.fields.batteryEnd'), type: 'number', min: 0, half: true },
+  { key: 'energy_kwh', label: t('trips.fields.energy'), type: 'number', half: true,
+    hint: t('trips.fields.energyHint') },
+  { key: 'fuel_l', label: t('trips.fields.fuel'), type: 'number', min: 0, half: true },
+  { key: 'note', label: t('trips.fields.note'), type: 'textarea' },
 ])
 
-const idleFields: Field[] = [
-  { key: 'zone', label: 'Where', type: 'text' },
-  { key: 'battery_used_pct', label: 'Battery used (%)', type: 'number', half: true },
-  { key: 'energy_kwh', label: 'Electricity (kWh)', type: 'number', half: true,
-    hint: 'Leave empty to derive it from the battery % used.' },
-  { key: 'fuel_l', label: 'Fuel (L)', type: 'number', min: 0, half: true },
-  { key: 'note', label: 'Note', type: 'textarea' },
-]
+const idleFields = computed<Field[]>(() => [
+  { key: 'zone', label: t('trips.idle.fields.where'), type: 'text' },
+  { key: 'battery_used_pct', label: t('trips.idle.fields.batteryUsed'), type: 'number', half: true },
+  { key: 'energy_kwh', label: t('trips.fields.energy'), type: 'number', half: true,
+    hint: t('trips.fields.energyHint') },
+  { key: 'fuel_l', label: t('trips.fields.fuel'), type: 'number', min: 0, half: true },
+  { key: 'note', label: t('trips.fields.note'), type: 'textarea' },
+])
 
 function add(): void {
   const now = nowLocalInput()
@@ -118,18 +130,18 @@ const split = ref<{ km: string; at: string; address: string } | null>(null)
 const busy = ref(false)
 const actionError = ref('')
 
-function openDetail(t: Trip): void {
-  detailId.value = t.id
+function openDetail(trip: Trip): void {
+  detailId.value = trip.id
   split.value = null
   actionError.value = ''
 }
 
 /** Trips of the same vehicle directly before and after, in time order. */
 const neighbours = computed(() => {
-  const t = detail.value
-  if (!t) return { prev: null, next: null }
-  const same = trips.items.value.filter((x) => x.vehicle_id === t.vehicle_id).sort((a, b) => a.start_ts.localeCompare(b.start_ts))
-  const i = same.findIndex((x) => x.id === t.id)
+  const current = detail.value
+  if (!current) return { prev: null, next: null }
+  const same = trips.items.value.filter((x) => x.vehicle_id === current.vehicle_id).sort((a, b) => a.start_ts.localeCompare(b.start_ts))
+  const i = same.findIndex((x) => x.id === current.id)
   return { prev: same[i - 1] ?? null, next: same[i + 1] ?? null }
 })
 
@@ -140,15 +152,15 @@ async function restoreAll(created: string[], originals: string[]): Promise<void>
 }
 
 async function merge(other: Trip): Promise<void> {
-  const t = detail.value
-  if (!t) return
+  const current = detail.value
+  if (!current) return
   busy.value = true
   actionError.value = ''
   try {
-    const merged = await api.mergeTrips([t.id, other.id])
+    const merged = await api.mergeTrips([current.id, other.id])
     await trips.load()
     detailId.value = merged.id
-    toast('Trips merged', 'Undo', () => restoreAll([merged.id], [t.id, other.id]))
+    toast(t('trips.detail.toast.merged'), t('common.actions.undo'), () => restoreAll([merged.id], [current.id, other.id]))
   } catch (err) {
     actionError.value = (err as Error).message
   } finally {
@@ -157,19 +169,19 @@ async function merge(other: Trip): Promise<void> {
 }
 
 function startSplit(): void {
-  const t = detail.value
-  if (!t) return
-  const middle = new Date((new Date(t.start_ts).getTime() + new Date(t.end_ts).getTime()) / 2).toISOString()
-  split.value = { km: String(Math.round((t.distance_km / 2) * 10) / 10), at: toLocalInput(middle), address: '' }
+  const current = detail.value
+  if (!current) return
+  const middle = new Date((new Date(current.start_ts).getTime() + new Date(current.end_ts).getTime()) / 2).toISOString()
+  split.value = { km: String(Math.round((current.distance_km / 2) * 10) / 10), at: toLocalInput(middle), address: '' }
 }
 
 async function doSplit(): Promise<void> {
-  const t = detail.value
-  if (!t || !split.value) return
+  const current = detail.value
+  if (!current || !split.value) return
   busy.value = true
   actionError.value = ''
   try {
-    const parts = await api.splitTrip(t.id, {
+    const parts = await api.splitTrip(current.id, {
       at_km: Number(split.value.km),
       at_ts: fromLocalInput(split.value.at),
       address: split.value.address.trim() || null,
@@ -177,7 +189,7 @@ async function doSplit(): Promise<void> {
     await trips.load()
     detailId.value = parts[0].id
     split.value = null
-    toast('Trip split', 'Undo', () => restoreAll(parts.map((p) => p.id), [t.id]))
+    toast(t('trips.detail.toast.split'), t('common.actions.undo'), () => restoreAll(parts.map((p) => p.id), [current.id]))
   } catch (err) {
     actionError.value = err instanceof ApiError ? Object.values(err.fields)[0] ?? err.message : (err as Error).message
   } finally {
@@ -193,9 +205,9 @@ function editDetail(): void {
 
 async function deleteDetail(): Promise<void> {
   if (!detail.value) return
-  const t = detail.value
+  const current = detail.value
   detailId.value = null
-  await trips.remove(t)
+  await trips.remove(current)
 }
 
 const showIdle = computed(() => idle.items.value.length > 0)
@@ -207,50 +219,42 @@ const noCollector = computed(() =>
 <template>
   <div class="stack">
     <div class="page-head">
-      <h2>Trips</h2>
+      <h2>{{ t('common.nav.trips') }}</h2>
       <div class="actions">
-        <div class="segmented" role="group" aria-label="Display">
-          <button :class="{ on: view === 'list' }" :aria-pressed="view === 'list'" @click="view = 'list'">List</button>
-          <button :class="{ on: view === 'map' }" :aria-pressed="view === 'map'" @click="view = 'map'">Map</button>
+        <div class="segmented" role="group" :aria-label="t('trips.head.display')">
+          <button :class="{ on: view === 'list' }" :aria-pressed="view === 'list'" @click="view = 'list'">{{ t('trips.head.list') }}</button>
+          <button :class="{ on: view === 'map' }" :aria-pressed="view === 'map'" @click="view = 'map'">{{ t('trips.head.map') }}</button>
         </div>
-        <a :href="api.exportUrl('trips', params())" download><button>Export CSV</button></a>
-        <button class="primary" :disabled="!activeVehicles.length" @click="add">Add trip</button>
+        <a :href="api.exportUrl('trips', params())" download><button>{{ t('trips.head.exportCsv') }}</button></a>
+        <button class="primary" :disabled="!activeVehicles.length" @click="add">{{ t('trips.head.add') }}</button>
       </div>
     </div>
     <p v-if="trips.error.value" class="notice error">{{ trips.error.value }}</p>
 
     <div v-if="trips.items.value.length" class="stats card">
-      <div class="stat"><div class="label">Trips</div><div class="value">{{ trips.items.value.length }}</div>
+      <div class="stat"><div class="label">{{ t('common.nav.trips') }}</div><div class="value">{{ num(trips.items.value.length) }}</div>
         <div class="sub">{{ num(totals.km, 1) }} km</div></div>
-      <div class="stat"><div class="label">Electricity</div><div class="value">{{ num(totals.kwh, 1) }} kWh</div>
+      <div class="stat"><div class="label">{{ t('trips.stats.electricity') }}</div><div class="value">{{ num(totals.kwh, 1) }} kWh</div>
         <div class="sub">{{ totals.km >= 1 ? `${num((totals.kwh / totals.km) * 100, 1)} kWh/100 km` : '—' }}</div></div>
-      <div class="stat"><div class="label">Fuel</div><div class="value">{{ num(totals.litres, 1) }} L</div>
+      <div class="stat"><div class="label">{{ t('trips.stats.fuel') }}</div><div class="value">{{ num(totals.litres, 1) }} L</div>
         <div class="sub">{{ totals.km >= 1 ? `${num((totals.litres / totals.km) * 100, 1)} L/100 km` : '—' }}</div></div>
-      <div class="stat"><div class="label">Cost</div><div class="value">{{ money(totals.cost) }}</div>
-        <div class="sub">{{ totals.km >= 1 ? `${money(totals.cost / totals.km, 3)} / km` : '—' }}</div></div>
+      <div class="stat"><div class="label">{{ t('trips.stats.cost') }}</div><div class="value">{{ money(totals.cost) }}</div>
+        <div class="sub">{{ totals.km >= 1 ? t('trips.stats.perKm', { amount: money(totals.cost / totals.km, 3) }) : '—' }}</div></div>
     </div>
 
     <TripMap v-if="view === 'map'" :trips="trips.items.value" :selected="detailId" @select="openDetail" />
     <DataTable v-else :columns="columns" :rows="trips.items.value" :loading="trips.loading.value"
-      :empty="noCollector
-        ? 'Trips are recorded automatically for cars set up in the AutoLedger Collector. A manual vehicle\'s distance comes from its odometer readings.'
-        : 'No trips in this period.'"
-      :extra="{ label: () => 'Details', run: openDetail }" @edit="trips.openEdit" @delete="trips.remove" />
-    <p class="small muted">
-      ~ before a time: the car reported only after the trip, so the start is when it was last seen parked.
-      Fuel is smoothed for gauge noise, so it can still shift a little with the next reports; ✓ fuel: corrected
-      with the litres refuelled between two full tanks.
-    </p>
+      :empty="noCollector ? t('trips.empty.noCollector') : t('trips.empty.none')"
+      :extra="{ label: () => t('trips.details'), run: openDetail }" @edit="trips.openEdit" @delete="trips.remove" />
+    <p class="small muted">{{ t('trips.footnote') }}</p>
 
     <section v-if="showIdle" class="card">
-      <h2>Climate &amp; standby</h2>
-      <p class="small muted">
-        Energy used while parked (pre-heating, standby). It is part of the energy cost, but not of the consumption per km.
-      </p>
+      <h2>{{ t('trips.idle.title') }}</h2>
+      <p class="small muted">{{ t('trips.idle.intro') }}</p>
       <DataTable :columns="idleColumns" :rows="idle.items.value" empty="" @edit="idle.openEdit" @delete="idle.remove">
         <template #foot>
           <tr>
-            <td :colspan="state.vehicleId ? 3 : 4">{{ idle.items.value.length }} records</td>
+            <td :colspan="state.vehicleId ? 3 : 4">{{ tn('trips.idle.records', idle.items.value.length, { n: num(idle.items.value.length) }) }}</td>
             <td class="num">{{ num(idleTotals.kwh, 2) }}</td>
             <td></td>
             <td class="num">{{ money(idleTotals.cost) }}</td>
@@ -261,37 +265,41 @@ const noCollector = computed(() =>
     </section>
 
     <div v-if="detail" class="overlay" @click.self="detailId = null">
-      <div class="dialog" role="dialog" aria-modal="true" aria-label="Trip details">
+      <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('trips.detail.ariaLabel')">
         <h2>{{ route(detail) }}</h2>
         <p class="small muted" style="margin-top: -6px">
           {{ fmtDateTime(detail.start_ts) }} – {{ time(detail.end_ts) }}
-          <template v-if="detail.start_ts_estimated"> · start estimated</template>
+          <template v-if="detail.start_ts_estimated"> · {{ t('trips.detail.startEstimated') }}</template>
           · {{ num(detail.distance_km, 1) }} km
-          ({{ detail.distance_source === 'trip_meter' ? 'trip meter' : detail.distance_source }})
+          ({{ distanceSource(detail) }})
         </p>
 
         <dl class="facts">
           <template v-if="detail.odometer_start != null">
-            <dt>Odometer</dt><dd>{{ num(detail.odometer_start) }} → {{ num(detail.odometer_end) }} km</dd>
+            <dt>{{ t('trips.detail.facts.odometer') }}</dt><dd>{{ num(detail.odometer_start) }} → {{ num(detail.odometer_end) }} km</dd>
           </template>
           <template v-if="detail.battery_used_pct != null">
-            <dt>Battery</dt>
-            <dd>{{ num(detail.battery_start_pct, 1) }} → {{ num(detail.battery_end_pct, 1) }} % (used {{ num(detail.battery_used_pct, 1) }} %)</dd>
+            <dt>{{ t('trips.detail.facts.battery') }}</dt>
+            <dd>{{ t('trips.detail.facts.batteryValue', {
+              start: num(detail.battery_start_pct, 1),
+              end: num(detail.battery_end_pct, 1),
+              used: num(detail.battery_used_pct, 1),
+            }) }}</dd>
           </template>
           <template v-if="detail.charged_kwh">
-            <dt>Charged in between</dt><dd>{{ num(detail.charged_kwh, 2) }} kWh</dd>
+            <dt>{{ t('trips.detail.facts.chargedBetween') }}</dt><dd>{{ num(detail.charged_kwh, 2) }} kWh</dd>
           </template>
           <template v-if="detail.fuel_start_l != null">
-            <dt>Tank</dt><dd>{{ num(detail.fuel_start_l, 1) }} → {{ num(detail.fuel_end_l, 1) }} L</dd>
+            <dt>{{ t('trips.detail.facts.tank') }}</dt><dd>{{ num(detail.fuel_start_l, 1) }} → {{ num(detail.fuel_end_l, 1) }} L</dd>
           </template>
         </dl>
 
         <template v-if="detail.costing">
-          <h3 class="small">How the cost was calculated</h3>
+          <h3 class="small">{{ t('trips.detail.explain.title') }}</h3>
           <table class="explain">
             <tbody>
               <tr>
-                <td>Electricity</td>
+                <td>{{ t('trips.detail.explain.electricity') }}</td>
                 <td>
                   <template v-if="detail.costing.kwh_per_pct != null && detail.battery_used_pct != null">
                     {{ num(detail.battery_used_pct, 1) }} % × {{ num(detail.costing.kwh_per_pct, 3) }} kWh/%
@@ -303,23 +311,25 @@ const noCollector = computed(() =>
                 <td class="num">{{ money(detail.costing.electricity_cost) }}</td>
               </tr>
               <tr>
-                <td>Fuel</td>
+                <td>{{ t('trips.detail.explain.fuel') }}</td>
                 <td>
                   {{ num(detail.costing.fuel_l, 2) }} L
-                  <template v-if="detail.costing.fuel_reconciled">(gauge {{ num(detail.costing.fuel_l_measured, 2) }} L, corrected at the full tank)</template>
-                  <template v-else-if="Math.abs(detail.costing.fuel_l_measured - detail.costing.fuel_l) >= 0.005">(gauge
-                    {{ num(detail.costing.fuel_l_measured, 2) }} L, smoothed for gauge noise; provisional until the next full tank)</template>
-                  <template v-else-if="detail.costing.fuel_l">(provisional until the next full tank)</template>
+                  <template v-if="detail.costing.fuel_reconciled">{{ t('trips.detail.explain.fuelReconciled', { measured: num(detail.costing.fuel_l_measured, 2) }) }}</template>
+                  <template v-else-if="Math.abs(detail.costing.fuel_l_measured - detail.costing.fuel_l) >= 0.005">{{
+                    t('trips.detail.explain.fuelSmoothed', { measured: num(detail.costing.fuel_l_measured, 2) }) }}</template>
+                  <template v-else-if="detail.costing.fuel_l">{{ t('trips.detail.explain.fuelProvisional') }}</template>
                   × {{ money(detail.costing.l_price, 3) }}
                 </td>
                 <td class="num">{{ money(detail.costing.fuel_cost) }}</td>
               </tr>
-              <tr class="total"><td>Trip</td><td>{{ perKm(detail) }} / km</td><td class="num">{{ money(detail.costing.cost) }}</td></tr>
+              <tr class="total">
+                <td>{{ t('trips.detail.explain.trip') }}</td>
+                <td>{{ t('trips.detail.explain.perKm', { amount: perKm(detail) }) }}</td>
+                <td class="num">{{ money(detail.costing.cost) }}</td>
+              </tr>
             </tbody>
           </table>
-          <p class="small muted">
-            Prices are the average of what is in the battery and in the tank: your charges and refuels, mixed in proportion.
-          </p>
+          <p class="small muted">{{ t('trips.detail.explain.pricesNote') }}</p>
           <ul v-if="detail.costing.notes.length" class="small">
             <li v-for="n in detail.costing.notes" :key="n">{{ n }}</li>
           </ul>
@@ -327,34 +337,34 @@ const noCollector = computed(() =>
         <p v-if="detail.note" class="small">{{ detail.note }}</p>
 
         <form v-if="split" class="form-grid split" @submit.prevent="doSplit">
-          <label class="field half"><span>Stop after (km)</span>
+          <label class="field half"><span>{{ t('trips.detail.split.stopAfter') }}</span>
             <input v-model="split.km" type="number" step="0.1" min="0.1" required /></label>
-          <label class="field half"><span>Stop time</span>
+          <label class="field half"><span>{{ t('trips.detail.split.stopTime') }}</span>
             <input v-model="split.at" type="datetime-local" required /></label>
-          <label class="field"><span>Stop place</span>
-            <input v-model="split.address" type="text" placeholder="e.g. Albert Heijn" /></label>
+          <label class="field"><span>{{ t('trips.detail.split.stopPlace') }}</span>
+            <input v-model="split.address" type="text" :placeholder="t('trips.detail.split.stopPlacePlaceholder')" /></label>
           <div class="dialog-actions" style="grid-column: 1 / -1">
-            <button type="button" @click="split = null">Cancel</button>
-            <button type="submit" class="primary" :disabled="busy">Split trip</button>
+            <button type="button" @click="split = null">{{ t('common.actions.cancel') }}</button>
+            <button type="submit" class="primary" :disabled="busy">{{ t('trips.detail.split.submit') }}</button>
           </div>
         </form>
         <p v-if="actionError" class="notice error">{{ actionError }}</p>
 
         <div v-if="!split" class="dialog-actions wrap">
-          <button v-if="neighbours.prev" :disabled="busy" @click="merge(neighbours.prev)">Merge with previous</button>
-          <button v-if="neighbours.next" :disabled="busy" @click="merge(neighbours.next)">Merge with next</button>
-          <button :disabled="busy || detail.distance_km <= 0.2" @click="startSplit">Split…</button>
-          <button @click="editDetail">Edit</button>
-          <button class="danger" @click="deleteDetail">Delete</button>
-          <button class="primary" @click="detailId = null">Close</button>
+          <button v-if="neighbours.prev" :disabled="busy" @click="merge(neighbours.prev)">{{ t('trips.detail.actions.mergePrevious') }}</button>
+          <button v-if="neighbours.next" :disabled="busy" @click="merge(neighbours.next)">{{ t('trips.detail.actions.mergeNext') }}</button>
+          <button :disabled="busy || detail.distance_km <= 0.2" @click="startSplit">{{ t('trips.detail.actions.split') }}</button>
+          <button @click="editDetail">{{ t('common.actions.edit') }}</button>
+          <button class="danger" @click="deleteDetail">{{ t('common.actions.delete') }}</button>
+          <button class="primary" @click="detailId = null">{{ t('common.actions.close') }}</button>
         </div>
       </div>
     </div>
 
-    <RecordDialog v-if="trips.dialog.value" :title="trips.dialog.value.mode === 'create' ? 'Add trip' : 'Edit trip'"
+    <RecordDialog v-if="trips.dialog.value" :title="trips.dialog.value.mode === 'create' ? t('trips.dialog.add') : t('trips.dialog.edit')"
       :fields="tripFields" :initial="trips.dialog.value.initial" :mode="trips.dialog.value.mode" :save="trips.save"
       @close="trips.dialog.value = null" />
-    <RecordDialog v-if="idle.dialog.value" title="Edit climate & standby" :fields="idleFields"
+    <RecordDialog v-if="idle.dialog.value" :title="t('trips.idle.editTitle')" :fields="idleFields"
       :initial="idle.dialog.value.initial" mode="edit" :save="idle.save" @close="idle.dialog.value = null" />
   </div>
 </template>

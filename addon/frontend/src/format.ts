@@ -1,5 +1,7 @@
 // Number, money and date formatting, plus conversions for form inputs.
 
+import { locale } from './i18n'
+
 let currency = 'EUR'
 
 export function setCurrency(code: string): void {
@@ -8,7 +10,7 @@ export function setCurrency(code: string): void {
 
 export function money(value: number | null | undefined, digits = 2): string {
   if (value == null) return '—'
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale(), {
     style: 'currency',
     currency,
     minimumFractionDigits: digits,
@@ -18,7 +20,7 @@ export function money(value: number | null | undefined, digits = 2): string {
 
 export function num(value: number | null | undefined, digits = 0): string {
   if (value == null) return '—'
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat(locale(), {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(value)
@@ -44,12 +46,12 @@ function parse(value: string): Date {
 
 export function fmtDate(value: string | null | undefined): string {
   if (!value) return '—'
-  return parse(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  return parse(value).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export function fmtDateTime(value: string | null | undefined): string {
   if (!value) return '—'
-  return parse(value).toLocaleString(undefined, {
+  return parse(value).toLocaleString(locale(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -59,7 +61,7 @@ export function fmtDateTime(value: string | null | undefined): string {
 }
 
 export function fmtMonth(month: string): string {
-  return parse(`${month}-01`).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+  return parse(`${month}-01`).toLocaleDateString(locale(), { month: 'short', year: '2-digit' })
 }
 
 /** ISO timestamp → value for <input type="datetime-local">. */

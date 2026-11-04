@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from './api'
 import { setCurrency } from './format'
+import { t } from './i18n'
 import {
   PRESETS,
   activeVehicles,
@@ -19,17 +20,17 @@ const router = useRouter()
 const ready = ref(false)
 
 const tabs = [
-  { to: '/', label: 'Overview' },
-  { to: '/trips', label: 'Trips' },
-  { to: '/fuel', label: 'Fuel' },
-  { to: '/charging', label: 'Charging' },
-  { to: '/maintenance', label: 'Maintenance' },
-  { to: '/costs', label: 'Costs' },
-  { to: '/reports', label: 'Reports' },
-  { to: '/review', label: 'Review' },
-  { to: '/vehicles', label: 'Vehicles' },
-  { to: '/settings', label: 'Settings' },
-]
+  { to: '/', key: 'overview' },
+  { to: '/trips', key: 'trips' },
+  { to: '/fuel', key: 'fuel' },
+  { to: '/charging', key: 'charging' },
+  { to: '/maintenance', key: 'maintenance' },
+  { to: '/costs', key: 'costs' },
+  { to: '/reports', key: 'reports' },
+  { to: '/review', key: 'review' },
+  { to: '/vehicles', key: 'vehicles' },
+  { to: '/settings', key: 'settings' },
+] as const
 
 // Vehicle and period live in the URL query, so deep links and reloads keep them.
 function readQuery(): void {
@@ -67,8 +68,8 @@ onMounted(async () => {
   } catch (err) {
     state.loadError =
       err instanceof ApiError && err.status === 401
-        ? 'Open AutoLedger from the Home Assistant sidebar.'
-        : `Could not reach the AutoLedger API: ${(err as Error).message}`
+        ? t('common.app.openFromSidebar')
+        : t('common.app.cannotReach', { error: (err as Error).message })
   }
   ready.value = true
   // New collector data (a detected refuel, a finished charge) can arrive at any time.
@@ -84,39 +85,39 @@ onBeforeUnmount(() => window.clearInterval(reviewTimer))
     <div class="topbar-row">
       <h1 class="brand">AutoLedger</h1>
       <div class="filters" v-if="ready && !state.loadError">
-        <label class="sr-only" for="vehicle-filter">Vehicle</label>
+        <label class="sr-only" for="vehicle-filter">{{ t('common.app.filters.vehicle') }}</label>
         <select id="vehicle-filter" v-model="state.vehicleId">
-          <option value="">All vehicles</option>
+          <option value="">{{ t('common.app.filters.allVehicles') }}</option>
           <option v-for="v in activeVehicles" :key="v.id" :value="v.id">{{ v.name }}</option>
         </select>
-        <label class="sr-only" for="period-filter">Period</label>
+        <label class="sr-only" for="period-filter">{{ t('common.app.filters.period') }}</label>
         <select id="period-filter" v-model="state.preset">
           <option v-for="p in PRESETS" :key="p.value" :value="p.value">{{ p.label }}</option>
         </select>
         <template v-if="state.preset === 'custom'">
-          <input type="date" v-model="state.customFrom" aria-label="From" />
-          <input type="date" v-model="state.customTo" aria-label="To" />
+          <input type="date" v-model="state.customFrom" :aria-label="t('common.app.filters.from')" />
+          <input type="date" v-model="state.customTo" :aria-label="t('common.app.filters.to')" />
         </template>
       </div>
     </div>
-    <nav class="tabs" aria-label="Sections">
-      <router-link v-for="t in tabs" :key="t.to" :to="{ path: t.to, query: route.query }" class="tab"
-        :class="{ active: route.path === t.to }">{{ t.label }}<span v-if="t.to === '/review' && state.reviewCount"
+    <nav class="tabs" :aria-label="t('common.app.sections')">
+      <router-link v-for="tab in tabs" :key="tab.to" :to="{ path: tab.to, query: route.query }" class="tab"
+        :class="{ active: route.path === tab.to }">{{ t(`common.nav.${tab.key}`) }}<span v-if="tab.to === '/review' && state.reviewCount"
           class="count">{{ state.reviewCount }}</span></router-link>
     </nav>
   </header>
 
   <main class="page">
-    <div v-if="!ready" class="muted">Loading…</div>
+    <div v-if="!ready" class="muted">{{ t('common.actions.loading') }}</div>
     <div v-else-if="state.loadError" class="notice error">{{ state.loadError }}</div>
     <router-view v-else />
   </main>
 
   <div class="toasts" aria-live="polite">
-    <div v-for="t in state.toasts" :key="t.id" class="toast">
-      <span>{{ t.message }}</span>
-      <button v-if="t.action" class="link" @click="t.action(); dismissToast(t.id)">{{ t.actionLabel }}</button>
-      <button class="icon" aria-label="Dismiss" @click="dismissToast(t.id)">×</button>
+    <div v-for="item in state.toasts" :key="item.id" class="toast">
+      <span>{{ item.message }}</span>
+      <button v-if="item.action" class="link" @click="item.action(); dismissToast(item.id)">{{ item.actionLabel }}</button>
+      <button class="icon" :aria-label="t('common.actions.close')" @click="dismissToast(item.id)">×</button>
     </div>
   </div>
 </template>

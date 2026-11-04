@@ -12,7 +12,7 @@ The add-on serves a versioned JSON API. The collector uses it, the GUI uses it, 
 | Format | JSON, UTF-8, timestamps in ISO 8601 UTC, decimals as numbers |
 | IDs | UUIDv7 strings (time-ordered) |
 | Lists | `?limit=500&offset=0`, plus filters `vehicle_id`, `from` and `to` (local dates, inclusive) and `include_deleted`. The response is `{ "items": [...], "total": 123 }`. Each resource has a fixed sort order, newest first. |
-| Errors | `{ "error": { "code": "validation_error", "message": "...", "fields": { "litres": "must be > 0" } } }` with status 400/401/403/404/409/422. A rule that spans several fields reports under the key `_`. |
+| Errors | `{ "error": { "code": "validation_error", "message": "...", "fields": { "litres": "must be > 0" } } }` with status 400/401/403/404/409/422. A rule that spans several fields reports under the key `_`. Messages are English; with `Accept-Language: nl` they are Dutch (`autoledger/i18n.py`), as are the row errors of a CSV import preview. |
 | Concurrency | Every record has `version`. A `PATCH` that sends `If-Match: <version>` fails with `409` when the record has changed since. Without the header, the last write wins. |
 | PATCH | Send only the fields you change. The body is merged onto the stored record and validated as a whole. For a refuel, the value you did not send among litres, price and total is recalculated. |
 
@@ -20,7 +20,7 @@ The add-on serves a versioned JSON API. The collector uses it, the GUI uses it, 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET / PUT | `/settings` | Currency and default prices |
+| GET / PUT | `/settings` | Currency, interface `language` (`auto`/`en`/`nl`) and default prices |
 | GET | `/settings/token` | The API token. Only through Ingress. |
 | POST | `/settings/token/regenerate` | A new API token. Only through Ingress. |
 | GET | `/info` | `{ name, version, api_version, currency, timezone }`. The collector checks compatibility with this. |

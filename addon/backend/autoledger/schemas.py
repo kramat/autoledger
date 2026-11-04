@@ -551,6 +551,8 @@ class SettingsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     currency: str = Field("EUR", pattern=r"^[A-Z]{3}$")
+    # Interface language; "auto" follows each browser's own language.
+    language: Literal["auto", "en", "nl"] = "auto"
     electricity_price: float = Field(0.25, ge=0, description="Fallback €/kWh")
     public_charge_price: float = Field(0.59, ge=0, description="Default €/kWh for public charging")
     fuel_prices: FuelPrices = FuelPrices()

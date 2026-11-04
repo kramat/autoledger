@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+- Nederlands: the whole interface is now available in Dutch. **Settings → General → Language** chooses English,
+  Nederlands, or *Automatic* (the default), which follows each device's browser language. Dates, numbers and money
+  follow the language as well.
+- Error messages from the add-on come in the interface language too.
+- The add-on's options in Home Assistant have a Dutch description.
+- Collector 0.6.0: Dutch translation of the setup screens, entities, services and repair notices. Home Assistant
+  uses it when your profile language is Nederlands.
+
 ## 0.5.1
 
 - Foldables and phones: on narrow screens (a folded Galaxy Z Fold, most phones) every record table shows its rows as

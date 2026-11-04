@@ -1,0 +1,95 @@
+// Texts of the overview area.
+
+export default {
+  welcome: {
+    title: 'Welcome to AutoLedger',
+    text: 'Add your first vehicle to start tracking refuels, maintenance and costs.',
+    addVehicle: 'Add vehicle',
+  },
+  reviewNotice: {
+    one: '{n} item needs your input in Review.',
+    other: '{n} items need your input in Review.',
+  },
+  stats: {
+    distance: 'Distance',
+    odometer: 'Odometer {km}',
+    totalCost: 'Total cost',
+    perKm: '{amount} / km',
+    fuel: 'Fuel',
+    electricity: 'Electricity',
+    kwhUsed: '{kwh} kWh used',
+    charges: { one: '{n} charge', other: '{n} charges' },
+    maintenance: 'Maintenance',
+    entries: { one: '{n} entry', other: '{n} entries' },
+    otherCosts: 'Other costs',
+    otherHint: 'Insurance, tax, parking…',
+    depreciation: 'Depreciation',
+    depreciationHint: 'Loss of value, spread per month',
+    energy: 'Energy',
+  },
+  rolling: {
+    distance: 'Last 12 months: {km}',
+    totalPerKm: '{amount} / km total',
+    energyPerKm: '{amount} / km energy',
+    electricShare: '{pct} % of km electric (estimate)',
+  },
+  lastTrip: {
+    label: 'Last trip {date}:',
+    detail: '{distance} km for {cost}',
+    roundTrip: 'round trip from {place}',
+  },
+  idle: {
+    electric: 'Climate & standby: {kwh} kWh for {cost} (in the energy cost, not in € per km)',
+    withFuel: 'Climate & standby: {kwh} kWh and {litres} L for {cost} (in the energy cost, not in € per km)',
+  },
+  charging: {
+    now: 'Charging now',
+    since: 'since {date}: {kwh} kWh, {cost}',
+    last: 'Last charge {date}: {kwh} kWh for {cost}',
+  },
+  lastRefuel: 'Last refuel {date}: {litres} L for {cost}',
+  due: {
+    due: 'due {date}',
+    wasDue: 'was due {date}',
+    kmLeft: '{km} left',
+    kmOver: '{km} over',
+  },
+  distanceKnownUntil: 'Distance is known up to {date}. Add an odometer reading or a refuel with odometer for later km.',
+  odometerIgnored: {
+    one: '{n} odometer value is lower than an earlier one and was ignored. Check the Fuel page.',
+    other: '{n} odometer values are lower than an earlier one and were ignored. Check the Fuel page.',
+  },
+  monthly: {
+    title: 'Last 12 months',
+    titleAll: 'Last 12 months · all vehicles',
+    display: 'Display',
+    chart: 'Chart',
+    table: 'Table',
+    costPerMonth: 'Cost per month',
+    costChartLabel: 'Stacked bar chart of cost per month by category',
+    distancePerMonth: 'Distance per month',
+    distanceChartLabel: 'Bar chart of km driven per month',
+    tooltipTotal: 'Total: {amount}',
+    note:
+      'Cars with recorded trips count fuel and electricity when they are used. Other cars count fuel in the month ' +
+      'you bought it, so single months can be uneven; the 12-month figures above smooth this out.',
+  },
+  categories: {
+    fuel: 'Fuel',
+    electricity: 'Electricity',
+    maintenance: 'Maintenance',
+    other: 'Other',
+    otherDepreciation: 'Other + depreciation',
+  },
+  table: {
+    month: 'Month',
+    km: 'km',
+    fuel: 'Fuel',
+    electricity: 'Electricity',
+    maintenance: 'Maintenance',
+    other: 'Other',
+    depreciation: 'Depreciation',
+    total: 'Total',
+    perKm: 'Per km',
+  },
+}

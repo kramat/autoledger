@@ -1,0 +1,424 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Verbinden met de AutoLedger-add-on",
+        "description": "Installeer en start eerst de AutoLedger-add-on. Het token staat op de pagina Instellingen van de add-on.",
+        "data": {
+          "url": "URL van de add-on",
+          "token": "API-token"
+        },
+        "data_description": {
+          "url": "Meestal http://<iets>-autoledger:8099. De suggestie komt uit je geïnstalleerde add-ons."
+        }
+      },
+      "hassio_confirm": {
+        "title": "AutoLedger-add-on gevonden",
+        "description": "Home Assistant verbinden met de AutoLedger-add-on? Voeg daarna je auto's en thuislader toe op de integratiepagina."
+      },
+      "reconfigure": {
+        "title": "Verbinding met de AutoLedger-add-on",
+        "data": {
+          "url": "URL van de add-on",
+          "token": "API-token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nieuw API-token nodig",
+        "description": "De add-on weigerde het token, bijvoorbeeld omdat er een nieuw is gemaakt. Kopieer het token van de pagina Instellingen van de add-on.",
+        "data": {
+          "token": "API-token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "De AutoLedger-add-on is op deze URL niet bereikbaar.",
+      "invalid_auth": "De add-on weigerde dit token."
+    },
+    "abort": {
+      "already_configured": "AutoLedger is al ingesteld.",
+      "reconfigure_successful": "Verbinding bijgewerkt.",
+      "reauth_successful": "Token bijgewerkt."
+    }
+  },
+  "config_subentries": {
+    "vehicle": {
+      "entry_type": "Voertuig",
+      "initiate_flow": {
+        "user": "Voertuig toevoegen",
+        "reconfigure": "Entiteiten wijzigen"
+      },
+      "step": {
+        "user": {
+          "title": "Welke auto?",
+          "description": "Kies het voertuig uit de AutoLedger-add-on en de sensor met zijn kilometerstand. De volgende stap stelt de andere entiteiten van hetzelfde apparaat voor.",
+          "data": {
+            "vehicle_id": "Voertuig in AutoLedger",
+            "odometer": "Kilometerstand"
+          }
+        },
+        "entities": {
+          "title": "Entiteiten van {vehicle}",
+          "description": "Alles behalve de kilometerstand is optioneel, maar elke entiteit maakt meer herkenning mogelijk: tankniveau voor tankbeurten, accuniveau voor publiek laden, locatie voor plaatsen.",
+          "data": {
+            "trip_meter": "Dagteller (op 0,1 km)",
+            "battery_level": "Accuniveau (%)",
+            "fuel_level": "Tankniveau",
+            "fuel_unit": "Eenheid van het tankniveau",
+            "tracker": "Apparaattracker",
+            "latitude": "Breedtegraad (als er geen apparaattracker is)",
+            "longitude": "Lengtegraad (als er geen apparaattracker is)",
+            "address": "Adres",
+            "charging_state": "Laadstatus",
+            "plug_state": "Laadkabel aangesloten",
+            "car_timestamp": "Tijd van de laatste melding van de auto",
+            "days_to_service": "Dagen tot onderhoud (aftelling van de auto zelf)",
+            "distance_to_service": "Afstand tot onderhoud (aftelling van de auto zelf)",
+            "fuel_price": "Brandstofprijs (€/L)"
+          },
+          "data_description": {
+            "car_timestamp": "Auto's met een cloudverbinding melden met vertraging. Hiermee krijgen records de tijd van de auto zelf.",
+            "fuel_unit": "Liters, of % van de tank (de tankinhoud uit de add-on wordt gebruikt om om te rekenen).",
+            "days_to_service": "Wordt in AutoLedger naast je onderhoudsschema's getoond als controle.",
+            "fuel_price": "Wordt de voorgestelde prijs van een herkende tankbeurt. Zonder deze entiteit wordt de prijs van je vorige tankbeurt voorgesteld."
+          },
+          "sections": {
+            "thresholds": {
+              "name": "Drempels voor herkenning",
+              "data": {
+                "min_trip_km": "Rit als de auto minstens zoveel reed",
+                "refuel_min_l": "Tankbeurt als de tank minstens zoveel stijgt",
+                "external_charge_min_pct": "Publiek geladen als de accu minstens zoveel stijgt",
+                "idle_min_pct": "Klimaat & stand-by als de accu bij stilstand minstens zoveel daalt",
+                "idle_min_l": "Klimaat & stand-by als de tank bij stilstand minstens zoveel daalt"
+              }
+            },
+            "boost": {
+              "name": "Snapshot boost (verse autogegevens bij lokale signalen)",
+              "description": "Auto's met een cloudverbinding sturen hun gegevens bij het parkeren, maar Home Assistant ziet dat pas bij de volgende ophaalronde van de integratie. Met een verversactie vraagt de Collector om verse gegevens zodra de thuislader begint of stopt, en zodra een van de personen hieronder van huis gaat of thuiskomt. Zo krijgen ritten het juiste begin en einde.",
+              "data": {
+                "boost_service": "Verversactie",
+                "boost_persons": "Personen bij wie weggaan of thuiskomen op een rit wijst",
+                "boost_max_per_day": "Hoogstens zoveel keer verversen per dag"
+              },
+              "data_description": {
+                "boost_service": "Actie van de integratie van de auto die verse gegevens ophaalt, bijvoorbeeld lynkco.force_update_data. Laat leeg om boost uit te zetten."
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Entiteiten van {vehicle}",
+          "data": {
+            "odometer": "Kilometerstand",
+            "trip_meter": "Dagteller (op 0,1 km)",
+            "battery_level": "Accuniveau (%)",
+            "fuel_level": "Tankniveau",
+            "fuel_unit": "Eenheid van het tankniveau",
+            "tracker": "Apparaattracker",
+            "latitude": "Breedtegraad (als er geen apparaattracker is)",
+            "longitude": "Lengtegraad (als er geen apparaattracker is)",
+            "address": "Adres",
+            "charging_state": "Laadstatus",
+            "plug_state": "Laadkabel aangesloten",
+            "car_timestamp": "Tijd van de laatste melding van de auto",
+            "days_to_service": "Dagen tot onderhoud (aftelling van de auto zelf)",
+            "distance_to_service": "Afstand tot onderhoud (aftelling van de auto zelf)",
+            "fuel_price": "Brandstofprijs (€/L)"
+          },
+          "sections": {
+            "thresholds": {
+              "name": "Drempels voor herkenning",
+              "data": {
+                "min_trip_km": "Rit als de auto minstens zoveel reed",
+                "refuel_min_l": "Tankbeurt als de tank minstens zoveel stijgt",
+                "external_charge_min_pct": "Publiek geladen als de accu minstens zoveel stijgt",
+                "idle_min_pct": "Klimaat & stand-by als de accu bij stilstand minstens zoveel daalt",
+                "idle_min_l": "Klimaat & stand-by als de tank bij stilstand minstens zoveel daalt"
+              }
+            },
+            "boost": {
+              "name": "Snapshot boost (verse autogegevens bij lokale signalen)",
+              "description": "Auto's met een cloudverbinding sturen hun gegevens bij het parkeren, maar Home Assistant ziet dat pas bij de volgende ophaalronde van de integratie. Met een verversactie vraagt de Collector om verse gegevens zodra de thuislader begint of stopt, en zodra een van de personen hieronder van huis gaat of thuiskomt. Zo krijgen ritten het juiste begin en einde.",
+              "data": {
+                "boost_service": "Verversactie",
+                "boost_persons": "Personen bij wie weggaan of thuiskomen op een rit wijst",
+                "boost_max_per_day": "Hoogstens zoveel keer verversen per dag"
+              },
+              "data_description": {
+                "boost_service": "Actie van de integratie van de auto die verse gegevens ophaalt, bijvoorbeeld lynkco.force_update_data. Laat leeg om boost uit te zetten."
+              }
+            }
+          },
+          "data_description": {
+            "days_to_service": "Wordt in AutoLedger naast je onderhoudsschema's getoond als controle.",
+            "fuel_price": "Wordt de voorgestelde prijs van een herkende tankbeurt. Zonder deze entiteit wordt de prijs van je vorige tankbeurt voorgesteld."
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "De AutoLedger-integratie draait niet. Controleer eerst de verbinding met de add-on.",
+        "cannot_connect": "De AutoLedger-add-on is niet bereikbaar.",
+        "no_vehicles": "Alle voertuigen van de add-on zijn al gekoppeld. Voeg eerst een voertuig toe in het AutoLedger-paneel.",
+        "reconfigure_successful": "Voertuig bijgewerkt."
+      },
+      "error": {
+        "unknown_service": "Deze actie bestaat niet in Home Assistant. Gebruik de vorm domein.actie, bijvoorbeeld lynkco.force_update_data."
+      }
+    },
+    "charger": {
+      "entry_type": "Thuislader",
+      "initiate_flow": {
+        "user": "Thuislader toevoegen",
+        "reconfigure": "Lader wijzigen"
+      },
+      "step": {
+        "user": {
+          "title": "Thuislader",
+          "description": "Laadsessies worden gemeten met de totale energieteller van de lader en per kWh geprijsd met je stroomprijs.",
+          "data": {
+            "name": "Naam",
+            "energy": "Energieteller (kWh, totaal)",
+            "vehicle_subentry": "Auto die hier laadt",
+            "price": "Sensor met stroomprijs",
+            "fixed_price": "Vaste prijs per kWh (als er geen prijssensor is)",
+            "power": "Vermogen",
+            "switch": "Schakelaar"
+          },
+          "data_description": {
+            "power": "Optioneel. Alleen gebruikt om het einde van een sessie eerder te zien; de energie komt altijd van de teller.",
+            "price": "Bijvoorbeeld je dynamische tarief. Als die niet beschikbaar is, wordt de vaste prijs of de standaardprijs van de add-on gebruikt."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Sessieherkenning",
+              "data": {
+                "start_w": "Laden boven",
+                "stop_w": "Niet laden onder",
+                "min_session_kwh": "Sessies negeren kleiner dan"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Thuislader",
+          "data": {
+            "name": "Naam",
+            "energy": "Energieteller (kWh, totaal)",
+            "vehicle_subentry": "Auto die hier laadt",
+            "price": "Sensor met stroomprijs",
+            "fixed_price": "Vaste prijs per kWh (als er geen prijssensor is)",
+            "power": "Vermogen",
+            "switch": "Schakelaar"
+          },
+          "sections": {
+            "advanced": {
+              "name": "Sessieherkenning",
+              "data": {
+                "start_w": "Laden boven",
+                "stop_w": "Niet laden onder",
+                "min_session_kwh": "Sessies negeren kleiner dan"
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "De AutoLedger-integratie draait niet. Controleer eerst de verbinding met de add-on.",
+        "reconfigure_successful": "Lader bijgewerkt."
+      }
+    }
+  },
+  "selector": {
+    "fuel_unit": {
+      "options": {
+        "L": "Liters",
+        "%": "% van de tank"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cost_this_month": {
+        "name": "Kosten deze maand"
+      },
+      "energy_cost_this_month": {
+        "name": "Energiekosten deze maand"
+      },
+      "distance_this_month": {
+        "name": "Afstand deze maand"
+      },
+      "electricity_this_month": {
+        "name": "Stroom deze maand"
+      },
+      "fuel_this_month": {
+        "name": "Brandstof deze maand"
+      },
+      "cost_per_km": {
+        "name": "Energiekosten per km"
+      },
+      "total_cost_per_km": {
+        "name": "Totale kosten per km"
+      },
+      "fuel_consumption": {
+        "name": "Brandstofverbruik"
+      },
+      "electric_consumption": {
+        "name": "Stroomverbruik"
+      },
+      "last_trip": {
+        "name": "Laatste rit"
+      },
+      "last_charge": {
+        "name": "Laatste laadbeurt"
+      },
+      "odometer": {
+        "name": "Kilometerstand"
+      },
+      "review_items": {
+        "name": "Te controleren"
+      },
+      "session_energy": {
+        "name": "Energie van de sessie"
+      },
+      "session_cost": {
+        "name": "Kosten van de sessie"
+      },
+      "next_maintenance": {
+        "name": "Volgend onderhoud"
+      }
+    },
+    "binary_sensor": {
+      "session_active": {
+        "name": "Laden"
+      },
+      "maintenance_due": {
+        "name": "Onderhoud nodig"
+      }
+    }
+  },
+  "issues": {
+    "addon_unreachable": {
+      "title": "AutoLedger-add-on niet bereikbaar",
+      "description": "{count} records wachten omdat de add-on niet bereikbaar is ({error}). Ze worden bewaard en afgeleverd zodra hij weer draait. Controleer of de add-on gestart is."
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "De AutoLedger Collector is niet ingesteld."
+    },
+    "not_a_vehicle": {
+      "message": "Kies een AutoLedger-voertuig."
+    },
+    "not_collected": {
+      "message": "Dit voertuig heeft geen voertuig in de Collector. Voeg het eerst toe bij de AutoLedger-integratie."
+    }
+  },
+  "services": {
+    "add_refuel": {
+      "name": "Tankbeurt toevoegen",
+      "description": "Voegt een tankbeurt toe aan AutoLedger. Geef twee van: liters, totaal en prijs per liter.",
+      "fields": {
+        "vehicle": {
+          "name": "Voertuig",
+          "description": "Het AutoLedger-voertuig."
+        },
+        "litres": {
+          "name": "Liters",
+          "description": "Liters volgens de bon."
+        },
+        "total": {
+          "name": "Totaal",
+          "description": "Betaald bedrag."
+        },
+        "price_per_l": {
+          "name": "Prijs per liter",
+          "description": "Prijs per liter."
+        },
+        "odometer": {
+          "name": "Kilometerstand",
+          "description": "Kilometerstand bij het tanken, voor L/100 km."
+        },
+        "full_tank": {
+          "name": "Volle tank",
+          "description": "De tank is helemaal volgetankt."
+        },
+        "station": {
+          "name": "Tankstation",
+          "description": "Naam of plaats van het tankstation."
+        },
+        "timestamp": {
+          "name": "Tijd",
+          "description": "Wanneer het gebeurde. Standaard: nu."
+        }
+      }
+    },
+    "add_charge": {
+      "name": "Laadbeurt toevoegen",
+      "description": "Voegt een laadbeurt buiten de deur toe aan AutoLedger.",
+      "fields": {
+        "vehicle": {
+          "name": "Voertuig",
+          "description": "Het AutoLedger-voertuig."
+        },
+        "energy_kwh": {
+          "name": "Energie",
+          "description": "Geladen kWh."
+        },
+        "total": {
+          "name": "Totaal",
+          "description": "Betaald bedrag. Laat leeg om de prijs per kWh te gebruiken."
+        },
+        "price_per_kwh": {
+          "name": "Prijs per kWh",
+          "description": "Prijs per kWh."
+        },
+        "location": {
+          "name": "Locatie",
+          "description": "Waar je hebt geladen."
+        },
+        "timestamp": {
+          "name": "Tijd",
+          "description": "Wanneer het laden begon. Standaard: nu."
+        }
+      }
+    },
+    "add_odometer": {
+      "name": "Kilometerstand toevoegen",
+      "description": "Voegt een kilometerstand toe aan AutoLedger.",
+      "fields": {
+        "vehicle": {
+          "name": "Voertuig",
+          "description": "Het AutoLedger-voertuig."
+        },
+        "odometer": {
+          "name": "Kilometerstand",
+          "description": "Kilometerstand in km."
+        },
+        "timestamp": {
+          "name": "Tijd",
+          "description": "Wanneer hij is afgelezen. Standaard: nu."
+        }
+      }
+    },
+    "resync": {
+      "name": "Opnieuw synchroniseren",
+      "description": "Stuurt wachtende records nu naar de add-on en ververst de sensoren."
+    },
+    "backfill": {
+      "name": "Geschiedenis inlezen",
+      "description": "Leest de opgeslagen geschiedenis van de entiteiten van het voertuig vanaf de startdatum tot het moment dat het live volgen begon, en voegt de gevonden ritten, tankbeurten, publieke laadbeurten en kilometerstanden toe. Twee keer uitvoeren voegt niets dubbel toe. Thuislaadsessies worden niet ingelezen.",
+      "fields": {
+        "vehicle": {
+          "name": "Voertuig",
+          "description": "Het AutoLedger-voertuig."
+        },
+        "start": {
+          "name": "Startdatum",
+          "description": "Home Assistant bewaart standaard ongeveer 10 dagen geschiedenis."
+        }
+      }
+    }
+  }
+}

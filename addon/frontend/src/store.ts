@@ -3,18 +3,18 @@
 import { computed, reactive } from 'vue'
 import { api, type Settings, type Vehicle } from './api'
 import { isoDate } from './format'
+import { setLanguagePreference, t } from './i18n'
 
 export type Preset = 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'last_12m' | 'all' | 'custom'
 
-export const PRESETS: { value: Preset; label: string }[] = [
-  { value: 'this_month', label: 'This month' },
-  { value: 'last_month', label: 'Last month' },
-  { value: 'this_year', label: 'This year' },
-  { value: 'last_year', label: 'Last year' },
-  { value: 'last_12m', label: 'Last 12 months' },
-  { value: 'all', label: 'All time' },
-  { value: 'custom', label: 'Custom…' },
-]
+const PRESET_VALUES: Preset[] = ['this_month', 'last_month', 'this_year', 'last_year', 'last_12m', 'all', 'custom']
+
+export const PRESETS: { value: Preset; readonly label: string }[] = PRESET_VALUES.map((value) => ({
+  value,
+  get label() {
+    return t(`common.presets.${value}`)
+  },
+}))
 
 interface Toast {
   id: number
@@ -76,6 +76,7 @@ export async function loadReviewCount(): Promise<void> {
 
 export async function loadSettings(): Promise<void> {
   state.settings = await api.settings()
+  setLanguagePreference(state.settings.language)
 }
 
 let toastId = 0

@@ -200,5 +200,5 @@ There are no trips for a manual vehicle. Distance per month is spread between re
 | Backend | Python 3.13, FastAPI, SQLAlchemy 2, Alembic, Pydantic | Same language as HA, with typed models and an OpenAPI spec for free |
 | Database | SQLite in `/data` (WAL mode) | One file, included in HA backups, plenty for one household |
 | Frontend | Vue 3 + Vite + TypeScript, ECharts, Leaflet | Small bundle that works under the Ingress sub-path (all URLs relative) |
-| Language | English | Dutch to be added later with `vue-i18n`. Numbers and dates already follow the browser locale. |
+| Language | English and Dutch | A small built-in `t()` (`src/i18n/`): per-area text files, with the Dutch type-checked against the English so a missing text fails the build. Numbers and dates follow the chosen language. |
 | Theming | Reads the HA theme's CSS variables when available, light and dark | Looks native in the sidebar |

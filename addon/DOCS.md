@@ -33,6 +33,10 @@ With the AutoLedger Collector 0.4.0, each car gets `sensor.<car>_next_maintenanc
 
 **Reports** shows a calendar year (or any period) per month, quarter or year, with the cars side by side. *Per year* figures scale the period to 365 days, so a car with a shorter history compares fairly. Below that are monthly trends of € per km and consumption, and consumption per season. **Export XLSX / CSV** downloads the report.
 
+## Language
+
+AutoLedger speaks English and Dutch. Under **Settings → General → Language**, *Automatic* (the default) follows the language of each phone or browser; *English* and *Nederlands* fix it for everyone. The AutoLedger Collector follows your Home Assistant profile language.
+
 ## Receipts and depreciation
 
 **Receipts.** In the dialog of a refuel, a maintenance entry or a cost, **Add photo or PDF** attaches a receipt or invoice. On a phone this offers the camera. Photos over 1.5 MB are made smaller (2000 px JPEG) before they are uploaded; PDFs and HEIC photos are kept as they are, up to 20 MB. A 📎 in the table marks records with a receipt.

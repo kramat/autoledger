@@ -1,0 +1,6 @@
+configuration:
+  log_level:
+    name: Logniveau
+    description: Hoeveel de add-on in zijn log schrijft.
+network:
+  8099/tcp: API-poort voor je eigen scripts. Vereist het token van de pagina Instellingen.

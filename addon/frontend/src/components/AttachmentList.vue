@@ -4,6 +4,8 @@
 import { onMounted, ref } from 'vue'
 import { api, type Attachment, type AttachmentResource } from '../api'
 import { shrink } from '../attachments'
+import { num } from '../format'
+import { t } from '../i18n'
 import { toast } from '../store'
 
 const props = defineProps<{ resource: AttachmentResource; recordId: string | null }>()
@@ -46,22 +48,22 @@ async function remove(item: Attachment): Promise<void> {
   await api.removeAttachment(item.id)
   items.value = items.value.filter((a) => a.id !== item.id)
   emit('changed')
-  toast(`${item.filename} removed`, 'Undo', async () => {
+  toast(t('common.attachments.removed', { name: item.filename }), t('common.actions.undo'), async () => {
     items.value.push(await api.restoreAttachment(item.id))
     emit('changed')
   })
 }
 
 const isImage = (mime: string) => mime.startsWith('image/') && !mime.includes('heic') && !mime.includes('heif')
-const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} kB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`)
+const size = (bytes: number) => (bytes < 1024 * 1024 ? `${num(bytes / 1024)} kB` : `${num(bytes / 1024 / 1024, 1)} MB`)
 </script>
 
 <template>
   <div class="attachments">
     <div class="attachments-head">
-      <span class="small muted">Receipt or invoice</span>
+      <span class="small muted">{{ t('common.attachments.title') }}</span>
       <button type="button" class="link" :disabled="busy" @click="input?.click()">
-        {{ busy ? 'Uploading…' : 'Add photo or PDF' }}
+        {{ busy ? t('common.attachments.uploading') : t('common.attachments.add') }}
       </button>
       <input ref="input" type="file" accept="image/*,application/pdf" multiple hidden @change="picked" />
     </div>
@@ -73,13 +75,15 @@ const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.round(bytes / 102
           <span class="name">{{ a.filename }}</span>
         </a>
         <span class="small muted">{{ size(a.size) }}</span>
-        <button type="button" class="link danger" @click="remove(a)">Remove</button>
+        <button type="button" class="link danger" @click="remove(a)">{{ t('common.attachments.remove') }}</button>
       </li>
       <li v-for="(f, i) in pending" :key="`p${i}`">
         <span class="file-icon" aria-hidden="true">{{ f.type === 'application/pdf' ? 'PDF' : 'IMG' }}</span>
         <span class="name">{{ f.name }}</span>
-        <span class="small muted">added when saved</span>
-        <button type="button" class="link danger" @click="pending = pending.filter((_, j) => j !== i)">Remove</button>
+        <span class="small muted">{{ t('common.attachments.pending') }}</span>
+        <button type="button" class="link danger" @click="pending = pending.filter((_, j) => j !== i)">
+          {{ t('common.attachments.remove') }}
+        </button>
       </li>
     </ul>
     <p v-if="error" class="small error">{{ error }}</p>

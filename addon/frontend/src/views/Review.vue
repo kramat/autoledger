@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { api, ApiError, type ReviewItem } from '../api'
 import { fmtDateTime, money, num } from '../format'
+import { t } from '../i18n'
 import { REVIEW_REASONS } from '../labels'
 import { activeVehicles, loadReviewCount, state, toast, vehicleName } from '../store'
 
@@ -43,7 +44,7 @@ async function resolve(item: ReviewItem, action: Action, values: Record<string, 
   errors[item.id] = ''
   try {
     await api.resolve(item.id, action, values)
-    toast(action === 'delete' ? 'Removed' : action === 'dismiss' ? 'Dismissed' : 'Saved')
+    toast(action === 'delete' ? t('review.toast.removed') : action === 'dismiss' ? t('review.toast.dismissed') : t('review.toast.saved'))
     await load()
     await loadReviewCount()
   } catch (err) {
@@ -80,10 +81,10 @@ onMounted(load)
 <template>
   <div class="stack">
     <div class="page-head" style="margin-bottom: 0">
-      <h2>Review</h2>
+      <h2>{{ t('common.nav.review') }}</h2>
     </div>
     <p v-if="error" class="notice error">{{ error }}</p>
-    <div v-else-if="!loading && !items.length" class="card empty">Nothing to review. Everything is confirmed.</div>
+    <div v-else-if="!loading && !items.length" class="card empty">{{ t('review.empty') }}</div>
 
     <section v-for="item in items" :key="item.id" class="card">
       <div class="vehicle-head">
@@ -96,43 +97,53 @@ onMounted(load)
       <!-- Refuel: confirm litres and enter the receipt total -->
       <template v-if="item.reason === 'refuel_price' && item.record">
         <p class="small muted">
-          {{ fmtDateTime(item.record.ts) }}<template v-if="item.record.station"> at {{ item.record.station }}</template>.
-          The fuel level rose by about {{ num(item.record.litres, 1) }} L. Suggested price
-          {{ money(item.record.price_per_l, 3) }}/L ({{ money(item.record.total) }}).
+          {{ item.record.station
+            ? t('review.refuel.whenAt', { time: fmtDateTime(item.record.ts), station: item.record.station })
+            : t('review.refuel.when', { time: fmtDateTime(item.record.ts) }) }}
+          {{ t('review.refuel.details', {
+            litres: num(item.record.litres, 1),
+            price: money(item.record.price_per_l, 3),
+            total: money(item.record.total),
+          }) }}
         </p>
         <div class="form-grid" style="margin: 10px 0">
-          <label class="field half"><span>Litres (from the receipt)</span>
+          <label class="field half"><span>{{ t('review.refuel.litres') }}</span>
             <input type="number" step="any" min="0" v-model="forms[item.id].litres" /></label>
-          <label class="field half"><span>Total paid</span>
-            <input type="number" step="any" min="0" v-model="forms[item.id].total" placeholder="From the receipt" /></label>
+          <label class="field half"><span>{{ t('review.refuel.total') }}</span>
+            <input type="number" step="any" min="0" v-model="forms[item.id].total" :placeholder="t('review.refuel.totalPlaceholder')" /></label>
         </div>
         <div class="dialog-actions" style="justify-content: flex-start; flex-wrap: wrap">
-          <button class="primary" @click="saveRefuel(item)">Save</button>
-          <button @click="resolve(item, 'accept')">Keep suggestion</button>
-          <button class="danger" @click="resolve(item, 'delete')">Not a refuel</button>
+          <button class="primary" @click="saveRefuel(item)">{{ t('common.actions.save') }}</button>
+          <button @click="resolve(item, 'accept')">{{ t('review.refuel.keepSuggestion') }}</button>
+          <button class="danger" @click="resolve(item, 'delete')">{{ t('review.refuel.notRefuel') }}</button>
         </div>
       </template>
 
       <!-- Charge away from home -->
       <template v-else-if="(item.reason === 'public_charge_price' || item.reason === 'possible_engine_charge') && item.record">
         <p class="small muted">
-          Between {{ fmtDateTime(item.record.start_ts) }} and {{ fmtDateTime(item.record.end_ts) }} the battery went from
-          {{ num(item.record.soc_start) }} % to {{ num(item.record.soc_end) }} %, about
-          {{ num(item.record.energy_kwh, 1) }} kWh<template v-if="item.record.address"> near {{ item.record.address }}</template>.
+          {{ t(item.record.address ? 'review.charge.detailsNear' : 'review.charge.details', {
+            start: fmtDateTime(item.record.start_ts),
+            end: fmtDateTime(item.record.end_ts),
+            socStart: num(item.record.soc_start),
+            socEnd: num(item.record.soc_end),
+            energy: num(item.record.energy_kwh, 1),
+            address: item.record.address ?? '',
+          }) }}
         </p>
         <div class="form-grid" style="margin: 10px 0">
-          <label class="field half"><span>Energy (kWh)</span>
+          <label class="field half"><span>{{ t('review.charge.energy') }}</span>
             <input type="number" step="any" min="0" v-model="forms[item.id].energy_kwh" /></label>
-          <label class="field half"><span>Price per kWh</span>
+          <label class="field half"><span>{{ t('review.charge.pricePerKwh') }}</span>
             <input type="number" step="any" min="0" v-model="forms[item.id].price_per_kwh" /></label>
-          <label class="field"><span>Or the total paid</span>
-            <input type="number" step="any" min="0" v-model="forms[item.id].price_total" placeholder="Overrides the price per kWh" /></label>
+          <label class="field"><span>{{ t('review.charge.total') }}</span>
+            <input type="number" step="any" min="0" v-model="forms[item.id].price_total" :placeholder="t('review.charge.totalPlaceholder')" /></label>
         </div>
         <div class="dialog-actions" style="justify-content: flex-start; flex-wrap: wrap">
-          <button class="primary" @click="saveCharge(item)">Save</button>
-          <button @click="resolve(item, 'update', { price_mode: 'free' })">It was free</button>
+          <button class="primary" @click="saveCharge(item)">{{ t('common.actions.save') }}</button>
+          <button @click="resolve(item, 'update', { price_mode: 'free' })">{{ t('review.charge.free') }}</button>
           <button class="danger" @click="resolve(item, 'delete')">
-            {{ item.reason === 'possible_engine_charge' ? 'Charged by the engine' : 'Not a charge' }}
+            {{ item.reason === 'possible_engine_charge' ? t('review.charge.byEngine') : t('review.charge.notCharge') }}
           </button>
         </div>
       </template>
@@ -140,26 +151,30 @@ onMounted(load)
       <!-- Home charge without vehicle -->
       <template v-else-if="item.reason === 'charge_without_vehicle' && item.record">
         <p class="small muted">
-          {{ fmtDateTime(item.record.start_ts) }}: {{ num(item.record.energy_kwh, 2) }} kWh for
-          {{ money(item.record.cost) }} on {{ item.record.charger_name ?? 'the home charger' }}.
+          {{ t('review.homeCharge.details', {
+            time: fmtDateTime(item.record.start_ts),
+            energy: num(item.record.energy_kwh, 2),
+            cost: money(item.record.cost),
+            charger: item.record.charger_name ?? t('review.homeCharge.homeCharger'),
+          }) }}
         </p>
         <div class="form-grid" style="margin: 10px 0">
-          <label class="field half"><span>Vehicle</span>
+          <label class="field half"><span>{{ t('review.homeCharge.vehicle') }}</span>
             <select v-model="forms[item.id].vehicle_id">
               <option v-for="v in activeVehicles" :key="v.id" :value="v.id">{{ v.name }}</option>
             </select></label>
         </div>
         <div class="dialog-actions" style="justify-content: flex-start; flex-wrap: wrap">
           <button class="primary" :disabled="!forms[item.id].vehicle_id"
-            @click="resolve(item, 'update', { vehicle_id: forms[item.id].vehicle_id })">Save</button>
-          <button class="danger" @click="resolve(item, 'delete')">Remove session</button>
+            @click="resolve(item, 'update', { vehicle_id: forms[item.id].vehicle_id })">{{ t('common.actions.save') }}</button>
+          <button class="danger" @click="resolve(item, 'delete')">{{ t('review.homeCharge.remove') }}</button>
         </div>
       </template>
 
       <template v-else>
-        <p class="small muted">{{ item.details?.error ?? 'No details' }} ({{ item.details?.type }})</p>
+        <p class="small muted">{{ item.details?.error ?? t('review.other.noDetails') }} ({{ item.details?.type }})</p>
         <div class="dialog-actions" style="justify-content: flex-start">
-          <button @click="resolve(item, 'dismiss')">Dismiss</button>
+          <button @click="resolve(item, 'dismiss')">{{ t('review.other.dismiss') }}</button>
         </div>
       </template>
 

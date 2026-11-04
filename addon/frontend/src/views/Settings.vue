@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { api, ApiError, type Info, type Resource, type RestoreResult, type Settings } from '../api'
 import ImportDialog from '../components/ImportDialog.vue'
 import { fmtDateTime } from '../format'
+import { setLanguagePreference, t, tn } from '../i18n'
+import { LANGUAGES } from '../labels'
 import { loadVehicles, state, toast } from '../store'
 
-const form = reactive<Settings>(JSON.parse(JSON.stringify(state.settings)))
+const initial: Settings = JSON.parse(JSON.stringify(state.settings))
+// Older servers do not send a language yet.
+const form = reactive<Settings>({ ...initial, language: initial.language ?? 'auto' })
 const errors = ref<Record<string, string>>({})
 const saving = ref(false)
 const info = ref<Info | null>(null)
@@ -14,17 +18,17 @@ const tokenError = ref('')
 const showToken = ref(false)
 const confirmRegenerate = ref(false)
 
-const exports: { resource: Resource; label: string }[] = [
-  { resource: 'vehicles', label: 'Vehicles' },
-  { resource: 'refuels', label: 'Refuels' },
-  { resource: 'odometer-readings', label: 'Odometer readings' },
-  { resource: 'charges', label: 'Charges' },
-  { resource: 'trips', label: 'Trips' },
-  { resource: 'idle-records', label: 'Climate & standby' },
-  { resource: 'maintenance', label: 'Maintenance' },
-  { resource: 'maintenance-schedules', label: 'Maintenance schedules' },
-  { resource: 'expenses', label: 'Other costs' },
-]
+const exports = computed<{ resource: Resource; label: string }[]>(() => [
+  { resource: 'vehicles', label: t('common.nav.vehicles') },
+  { resource: 'refuels', label: t('settings.export.resources.refuels') },
+  { resource: 'odometer-readings', label: t('settings.export.resources.odometerReadings') },
+  { resource: 'charges', label: t('settings.export.resources.charges') },
+  { resource: 'trips', label: t('common.nav.trips') },
+  { resource: 'idle-records', label: t('settings.export.resources.idleRecords') },
+  { resource: 'maintenance', label: t('common.nav.maintenance') },
+  { resource: 'maintenance-schedules', label: t('settings.export.resources.maintenanceSchedules') },
+  { resource: 'expenses', label: t('settings.export.resources.expenses') },
+])
 
 const importing = ref(false)
 const restoreFile = ref<File | null>(null)
@@ -48,20 +52,29 @@ async function restore(): Promise<void> {
     const data = JSON.parse(await restoreFile.value.text())
     restoreResult.value = await api.restoreBackup(data, restoreMode.value)
     await loadVehicles()
-    toast('Backup restored')
+    toast(t('settings.restore.done'))
   } catch (err) {
-    restoreError.value = err instanceof SyntaxError ? 'This file is not a JSON backup.' : (err as Error).message
+    restoreError.value = err instanceof SyntaxError ? t('settings.restore.notJson') : (err as Error).message
   } finally {
     restoring.value = false
   }
 }
 
 function restoredCount(result: RestoreResult): number {
-  return Object.values(result.tables).reduce((sum, t) => sum + t.inserted, 0)
+  return Object.values(result.tables).reduce((sum, table) => sum + table.inserted, 0)
 }
 
 function skippedCount(result: RestoreResult): number {
-  return Object.values(result.tables).reduce((sum, t) => sum + t.skipped, 0)
+  return Object.values(result.tables).reduce((sum, table) => sum + table.skipped, 0)
+}
+
+function restoreSummary(result: RestoreResult): string {
+  const parts = [tn('settings.restore.restored', restoredCount(result))]
+  const skipped = skippedCount(result)
+  if (skipped) parts.push(tn('settings.restore.skipped', skipped))
+  const files = result.files?.written ?? 0
+  if (files) parts.push(tn('settings.restore.files', files))
+  return parts.join(' ')
 }
 
 async function save(): Promise<void> {
@@ -70,10 +83,11 @@ async function save(): Promise<void> {
   try {
     form.currency = form.currency.toUpperCase()
     state.settings = await api.saveSettings(form)
-    toast('Settings saved')
+    setLanguagePreference(state.settings.language)
+    toast(t('settings.toast.saved'))
   } catch (err) {
     if (err instanceof ApiError) errors.value = err.fields
-    toast(`Not saved: ${(err as Error).message}`)
+    toast(t('settings.toast.notSaved', { error: (err as Error).message }))
   } finally {
     saving.value = false
   }
@@ -87,12 +101,12 @@ async function regenerate(): Promise<void> {
   token.value = (await api.regenerateToken()).token
   confirmRegenerate.value = false
   showToken.value = true
-  toast('New token created. Update it wherever the old one was used.')
+  toast(t('settings.token.created'))
 }
 
 async function copyToken(): Promise<void> {
   await navigator.clipboard.writeText(token.value)
-  toast('Token copied')
+  toast(t('settings.token.copied'))
 }
 
 onMounted(async () => {
@@ -108,45 +122,55 @@ onMounted(async () => {
 <template>
   <div class="stack">
     <form class="card" @submit.prevent="save">
-      <h2>Prices and currency</h2>
-      <p class="small muted">Defaults used when a price is not known, also by the Collector.</p>
+      <h2>{{ t('settings.general.title') }}</h2>
+      <div class="form-grid">
+        <label class="field half" :class="{ invalid: errors.language }">
+          <span>{{ t('settings.general.language') }}</span>
+          <select v-model="form.language">
+            <option v-for="l in LANGUAGES" :key="String(l.value)" :value="l.value">{{ l.label }}</option>
+          </select>
+          <small v-if="errors.language" class="error">{{ errors.language }}</small>
+        </label>
+      </div>
+      <h3 style="margin: 16px 0 8px">{{ t('settings.prices.title') }}</h3>
+      <p class="small muted">{{ t('settings.prices.hint') }}</p>
       <div class="form-grid">
         <label class="field half" :class="{ invalid: errors.currency }">
-          <span>Currency (ISO code)</span>
+          <span>{{ t('settings.prices.currency') }}</span>
           <input v-model="form.currency" maxlength="3" required />
           <small v-if="errors.currency" class="error">{{ errors.currency }}</small>
         </label>
         <label class="field half">
-          <span>Electricity, fallback price per kWh</span>
+          <span>{{ t('settings.prices.electricity') }}</span>
           <input type="number" step="any" min="0" v-model.number="form.electricity_price" required />
         </label>
         <label class="field half">
-          <span>Public charging, default price per kWh</span>
+          <span>{{ t('settings.prices.publicCharge') }}</span>
           <input type="number" step="any" min="0" v-model.number="form.public_charge_price" required />
         </label>
         <label class="field half">
-          <span>Petrol, default price per litre</span>
+          <span>{{ t('settings.prices.petrol') }}</span>
           <input type="number" step="any" min="0" v-model.number="form.fuel_prices.petrol" required />
         </label>
         <label class="field half">
-          <span>Diesel, default price per litre</span>
+          <span>{{ t('settings.prices.diesel') }}</span>
           <input type="number" step="any" min="0" v-model.number="form.fuel_prices.diesel" required />
         </label>
         <label class="field half">
-          <span>LPG, default price per litre</span>
+          <span>{{ t('settings.prices.lpg') }}</span>
           <input type="number" step="any" min="0" v-model.number="form.fuel_prices.lpg" required />
         </label>
       </div>
       <div class="dialog-actions">
-        <button type="submit" class="primary" :disabled="saving">Save</button>
+        <button type="submit" class="primary" :disabled="saving">{{ t('common.actions.save') }}</button>
       </div>
     </form>
 
     <section class="card">
-      <h2>Export</h2>
-      <p class="small muted">All records in one Excel workbook (a sheet per type), or one CSV file per type.</p>
+      <h2>{{ t('settings.export.title') }}</h2>
+      <p class="small muted">{{ t('settings.export.hint') }}</p>
       <div class="button-row">
-        <a :href="api.recordsWorkbookUrl()" download><button type="button" class="primary">All records (XLSX)</button></a>
+        <a :href="api.recordsWorkbookUrl()" download><button type="button" class="primary">{{ t('settings.export.workbook') }}</button></a>
         <a v-for="e in exports" :key="e.resource" :href="api.exportUrl(e.resource)" download>
           <button type="button">{{ e.label }}</button>
         </a>
@@ -154,87 +178,74 @@ onMounted(async () => {
     </section>
 
     <section class="card">
-      <h2>Import</h2>
-      <p class="small muted">
-        Refuels, maintenance, odometer readings or other costs from a CSV file, for example history from a spreadsheet.
-        You check the columns on a preview before anything is saved.
-      </p>
+      <h2>{{ t('settings.import.title') }}</h2>
+      <p class="small muted">{{ t('settings.import.hint') }}</p>
       <div class="button-row">
-        <button type="button" :disabled="!state.vehicles.length" @click="importing = true">Import CSV…</button>
+        <button type="button" :disabled="!state.vehicles.length" @click="importing = true">{{ t('settings.import.button') }}</button>
       </div>
     </section>
 
     <section class="card">
-      <h2>Backup</h2>
-      <p class="small muted">
-        A full JSON backup of everything in AutoLedger, to move to another installation. Home Assistant backups include
-        the add-on's database and receipt files as well. The API token is not in the file.
-      </p>
+      <h2>{{ t('settings.backup.title') }}</h2>
+      <p class="small muted">{{ t('settings.backup.hint') }}</p>
       <label class="field checkbox" style="margin: 0 0 12px">
         <input v-model="withFiles" type="checkbox" />
-        <span>Include receipt photos and invoices<small class="hint checkbox-hint">Makes the file larger. Without
-            them, a restore keeps the list of attachments but not the files.</small></span>
+        <span>{{ t('settings.backup.withFiles') }}<small class="hint checkbox-hint">{{ t('settings.backup.withFilesHint') }}</small></span>
       </label>
       <div class="button-row">
-        <a :href="api.backupUrl(withFiles)" download><button type="button">Download backup</button></a>
+        <a :href="api.backupUrl(withFiles)" download><button type="button">{{ t('settings.backup.download') }}</button></a>
       </div>
-      <h3 style="margin: 16px 0 8px">Restore</h3>
+      <h3 style="margin: 16px 0 8px">{{ t('settings.restore.title') }}</h3>
       <div class="form-grid" style="margin: 0 0 12px">
         <label class="field">
-          <span>Backup file</span>
+          <span>{{ t('settings.restore.file') }}</span>
           <input type="file" accept=".json,application/json" @change="pickBackup" />
         </label>
         <label class="field">
-          <span>How</span>
+          <span>{{ t('settings.restore.mode') }}</span>
           <select v-model="restoreMode">
-            <option value="empty">Into this add-on while it is still empty</option>
-            <option value="merge">Add what is missing, keep what is here</option>
+            <option value="empty">{{ t('settings.restore.modes.empty') }}</option>
+            <option value="merge">{{ t('settings.restore.modes.merge') }}</option>
           </select>
         </label>
       </div>
-      <p class="small muted" style="margin: 0 0 12px">The current database is copied to /data/backups first.</p>
+      <p class="small muted" style="margin: 0 0 12px">{{ t('settings.restore.copyFirst') }}</p>
       <div class="button-row">
-        <button type="button" class="primary" :disabled="!restoreFile || restoring" @click="restore">Restore</button>
+        <button type="button" class="primary" :disabled="!restoreFile || restoring" @click="restore">{{ t('settings.restore.button') }}</button>
       </div>
       <p v-if="restoreError" class="notice error" style="margin-top: 12px">{{ restoreError }}</p>
-      <p v-if="restoreResult" class="notice" style="margin-top: 12px">
-        Restored {{ restoredCount(restoreResult) }} records<template v-if="skippedCount(restoreResult)">;
-          {{ skippedCount(restoreResult) }} were already here</template><template
-          v-if="restoreResult.files?.written">, and {{ restoreResult.files.written }} receipt files</template>.
-      </p>
+      <p v-if="restoreResult" class="notice" style="margin-top: 12px">{{ restoreSummary(restoreResult) }}</p>
     </section>
 
     <section class="card">
-      <h2>API token</h2>
-      <p class="small muted">
-        The AutoLedger Collector integration and your own scripts use this token. Keep it private.
-      </p>
+      <h2>{{ t('settings.token.title') }}</h2>
+      <p class="small muted">{{ t('settings.token.hint') }}</p>
       <p v-if="tokenError" class="notice">{{ tokenError }}</p>
       <template v-else>
         <p><code>{{ showToken ? token : '•'.repeat(24) }}</code></p>
         <div style="display: flex; flex-wrap: wrap; gap: 8px">
-          <button type="button" @click="showToken = !showToken">{{ showToken ? 'Hide' : 'Show' }}</button>
-          <button type="button" @click="copyToken">Copy</button>
+          <button type="button" @click="showToken = !showToken">{{ showToken ? t('settings.token.hide') : t('settings.token.show') }}</button>
+          <button type="button" @click="copyToken">{{ t('settings.token.copy') }}</button>
           <button type="button" class="danger" @click="regenerate">
-            {{ confirmRegenerate ? 'Click again to replace the token' : 'Create new token' }}
+            {{ confirmRegenerate ? t('settings.token.confirm') : t('settings.token.create') }}
           </button>
         </div>
       </template>
     </section>
 
     <section v-if="info" class="card">
-      <h2>Collector</h2>
+      <h2>{{ t('settings.collector.title') }}</h2>
       <p class="small muted" style="margin-bottom: 0">
-        <template v-if="info.last_ingest_at">Last data from the AutoLedger Collector: {{ fmtDateTime(info.last_ingest_at) }}.</template>
-        <template v-else>The AutoLedger Collector has not sent any data yet. Install it via HACS and add the integration.</template>
+        <template v-if="info.last_ingest_at">{{ t('settings.collector.lastData', { time: fmtDateTime(info.last_ingest_at) }) }}</template>
+        <template v-else>{{ t('settings.collector.noData') }}</template>
       </p>
     </section>
 
     <section v-if="info" class="card small muted">
-      {{ info.name }} {{ info.version }} · API v{{ info.api_version }} · Time zone {{ info.timezone }}
+      {{ t('settings.about', { name: info.name, version: info.version, apiVersion: info.api_version, timezone: info.timezone }) }}
     </section>
     <ImportDialog v-if="importing" @close="importing = false"
-      @imported="(n) => toast(`${n} records imported`)" />
+      @imported="(n) => toast(tn('settings.import.imported', n))" />
   </div>
 </template>
 

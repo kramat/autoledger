@@ -1,4 +1,6 @@
 <script setup lang="ts" generic="T extends { id: string }">
+import { t } from '../i18n'
+
 export interface Column<R> {
   key: string
   label: string
@@ -25,7 +27,7 @@ const isBlank = (value: string) => !value || value === '—'
       <thead>
         <tr>
           <th v-for="c in columns" :key="c.key" :class="{ num: c.num }" scope="col">{{ c.label }}</th>
-          <th><span class="sr-only">Actions</span></th>
+          <th><span class="sr-only">{{ t('common.actions.actions') }}</span></th>
         </tr>
       </thead>
       <tbody>
@@ -34,9 +36,9 @@ const isBlank = (value: string) => !value || value === '—'
           <td v-for="c in columns" :key="c.key" :class="{ num: c.num, wrap: c.wrap, blank: isBlank(c.value(row)) }"
             :data-label="c.label">{{ c.value(row) }}</td>
           <td class="row-actions">
-            <button class="link" @click="emit('edit', row)">Edit</button>
+            <button class="link" @click="emit('edit', row)">{{ t('common.actions.edit') }}</button>
             <button v-if="extra" class="link" @click="extra.run(row)">{{ extra.label(row) }}</button>
-            <button class="link danger" @click="emit('delete', row)">Delete</button>
+            <button class="link danger" @click="emit('delete', row)">{{ t('common.actions.delete') }}</button>
           </td>
         </tr>
       </tbody>
@@ -44,6 +46,6 @@ const isBlank = (value: string) => !value || value === '—'
         <slot name="foot" />
       </tfoot>
     </table>
-    <div v-else class="empty">{{ loading ? 'Loading…' : empty }}</div>
+    <div v-else class="empty">{{ loading ? t('common.actions.loading') : empty }}</div>
   </div>
 </template>
