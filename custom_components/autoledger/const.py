@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 DOMAIN = "autoledger"
-VERSION = "0.5.0"
+VERSION = "0.5.2"
 API_VERSION = 1
 
 CONF_URL = "url"

@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" alt="" width="96" align="right">
+
 # AutoLedger
 
 Automatic trip, charging and fuel bookkeeping for Home Assistant, with a web GUI that brings all costs and maintenance for all your cars together.

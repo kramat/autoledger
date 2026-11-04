@@ -6,6 +6,8 @@ Domain: `autoledger`. Installed through HACS. It turns the states of your car an
 
 ## Setup
 
+The integration ships its own icon in `custom_components/autoledger/brand/` (`icon.png`, `icon@2x.png`), which Home Assistant 2026.3 and later shows without a brands-repository entry. The add-on's `icon.png` and `logo.png` are rendered from the same source, `assets/icon.svg`.
+
 1. Install and start the **AutoLedger add-on** first ([addon.md](addon.md#installation)).
 2. Install **AutoLedger Collector** via HACS and restart HA.
 3. HA shows *"AutoLedger discovered"*. Click **Configure**. Without discovery, add the integration manually and enter the URL and token from the add-on's Settings page.
