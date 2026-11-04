@@ -9,7 +9,7 @@ AutoLedger was built in five milestones between 1 and 4 November 2026, each endi
 | **M3: Trips** | 0.3.0 | Trip detector (snapshot mode), climate & standby records, kWh-per-% learning, battery and tank cost basis, fuel reconciliation, trips page with map, merge and split, backfill service |
 | **M4: Insight** | 0.4.0 | Reports (period, compare, trends), maintenance schedules and reminders, XLSX export, JSON backup/restore, CSV import |
 | **M5: Extras** | 0.5.0 | Snapshot boost, receipt photo attachments, depreciation, fuel price entity support |
-| Finishing | 0.5.1–0.6.0 | Layout for foldables and narrow screens, the app icon, the Dutch translation |
+| Finishing | 0.5.1–1.0.0 | Layout for foldables and narrow screens, the app icon, the Dutch translation, documentation, 1.0 |
 
 ## M1: Add-on core (2 Nov 2026)
 
@@ -100,11 +100,12 @@ AutoLedger was built in five milestones between 1 and 4 November 2026, each endi
   - `fuel_price` role: the entity's €/L becomes the suggested price of a detected refuel.
 - **Tests:** 99 add-on tests (depreciation math and API, attachments, backup with files) and 34 Collector engine tests (boost limits and presence hints). The dev database migrated from 0004 to 0005 with its backup and no schema difference to the models.
 
-## 0.5.1 – 0.6.0 (4 Nov 2026)
+## 0.5.1 – 1.0.0 (4 Nov 2026)
 
 - **0.5.1:** on screens narrower than 560 px (a folded Galaxy Z Fold, most phones) record tables show each row as a card; wider screens keep tables, with the actions column sticky on the right.
 - **0.5.2:** the app icon, as the add-on's `icon.png` / `logo.png` and the Collector's `brand/` images (shown by HA 2026.3 and later).
 - **0.6.0:** Dutch for the whole interface (a small built-in `t()` with type-checked texts), the API messages (`Accept-Language`), the add-on options and the Collector (`translations/nl.json`), with a language setting that defaults to the browser's language.
+- **1.0.0:** the documentation rewritten to describe the finished product (checked against the code), vehicles marked as Collector vehicles when the Collector delivers their data (migration 0006 fixes existing ones), and the unused charger option `start_w` and vehicle role `plug_state` removed.
 
 ## Ideas that were not built
 

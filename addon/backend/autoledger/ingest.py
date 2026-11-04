@@ -324,6 +324,13 @@ HANDLERS: dict[str, Callable[[Session, IngestEventIn, SettingsModel], str | None
 }
 
 
+def _mark_collector(db: Session, vehicle_id: str | None) -> None:
+    """A vehicle the Collector delivers data for is tracked by it (the GUI adapts to that)."""
+    vehicle = db.get(Vehicle, vehicle_id) if vehicle_id else None
+    if vehicle is not None and vehicle.tracking != "collector":
+        vehicle.tracking = "collector"
+
+
 def ingest(db: Session, events: list[IngestEventIn], settings: SettingsModel) -> dict:
     accepted: list[dict] = []
     duplicates: list[str] = []
@@ -340,6 +347,7 @@ def ingest(db: Session, events: list[IngestEventIn], settings: SettingsModel) ->
                 raise IngestError(f"Unsupported event type {event.type!r}")
             with db.begin_nested():
                 record_id = handler(db, event, settings)
+            _mark_collector(db, event.vehicle_id)
         except IngestError as err:
             error = str(err)
             _LOGGER.warning("Rejected collector event %s (%s): %s", event.uuid, event.type, error)

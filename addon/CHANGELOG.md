@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0
+
+The first complete release: everything in the [history](https://github.com/kramat/autoledger/blob/main/docs/history.md)
+is in, and the documentation describes AutoLedger as it is.
+
+- Vehicles the Collector sends data for are now marked as Collector vehicles. Until now every vehicle stayed
+  *manual*, so for a connected car *Log as done* did not fill in the odometer and the Trips page showed the text for
+  manual cars. The database upgrade fixes existing vehicles.
+- Collector 1.0.0: the charger option *Charging above* (it had no effect: a session starts on the kWh counter) and
+  the vehicle role *Charging cable connected* (nothing used it) are gone. Saved settings keep working.
+
 ## 0.6.0
 
 - Nederlands: the whole interface is now available in Dutch. **Settings → General → Language** chooses English,

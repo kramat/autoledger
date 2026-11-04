@@ -59,7 +59,6 @@ class Snapshot:
     address: str | None = None
     zone: str | None = None
     charging: bool | None = None
-    plugged: bool | None = None
     charger_kwh: float | None = None
 
     def to_dict(self) -> dict:
@@ -99,7 +98,7 @@ def sanitize(new: Snapshot, prev: Snapshot | None, tank_l: float | None) -> tupl
             notes.append(reason)
 
     for name in ("odometer_km", "trip_meter_km", "battery_pct", "fuel_l", "lat", "lon", "address", "zone",
-                 "charging", "plugged", "charger_kwh"):
+                 "charging", "charger_kwh"):
         if getattr(new, name) is None:
             keep(name)
 

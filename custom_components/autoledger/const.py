@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 DOMAIN = "autoledger"
-VERSION = "0.6.0"
+VERSION = "1.0.0"
 API_VERSION = 1
 
 CONF_URL = "url"
@@ -33,11 +33,10 @@ ROLE_LATITUDE = "latitude"
 ROLE_LONGITUDE = "longitude"
 ROLE_ADDRESS = "address"
 ROLE_CHARGING = "charging_state"
-ROLE_PLUG = "plug_state"
 ROLE_CAR_TIMESTAMP = "car_timestamp"
 VEHICLE_ROLES = (
     ROLE_ODOMETER, ROLE_TRIP_METER, ROLE_BATTERY, ROLE_FUEL, ROLE_TRACKER, ROLE_LATITUDE, ROLE_LONGITUDE,
-    ROLE_ADDRESS, ROLE_CHARGING, ROLE_PLUG, ROLE_CAR_TIMESTAMP,
+    ROLE_ADDRESS, ROLE_CHARGING, ROLE_CAR_TIMESTAMP,
 )
 # The car's own service countdown: read at each snapshot, but they do not trigger one.
 ROLE_DAYS_TO_SERVICE = "days_to_service"
@@ -61,7 +60,6 @@ CONF_PRICE = "price"
 CONF_FIXED_PRICE = "fixed_price"
 CONF_CHARGER_VEHICLE = "vehicle_subentry"
 CONF_ADVANCED = "advanced"
-CONF_START_W = "start_w"
 CONF_STOP_W = "stop_w"
 CONF_MIN_SESSION_KWH = "min_session_kwh"
 

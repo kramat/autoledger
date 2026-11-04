@@ -42,7 +42,6 @@ from .const import (
     CONF_POWER,
     CONF_PRICE,
     CONF_REFUEL_MIN_L,
-    CONF_START_W,
     CONF_STOP_W,
     CONF_SWITCH,
     CONF_THRESHOLDS,
@@ -64,7 +63,6 @@ from .const import (
     ROLE_LATITUDE,
     ROLE_LONGITUDE,
     ROLE_ODOMETER,
-    ROLE_PLUG,
     ROLE_TRACKER,
     ROLE_TRIP_METER,
     SIGNAL_CHARGER_UPDATE,
@@ -466,7 +464,6 @@ class VehicleTracker:
             address=parse_text(self._state(ROLE_ADDRESS)),
             zone=zone,
             charging=parse_flag(self._state(ROLE_CHARGING)),
-            plugged=parse_flag(self._state(ROLE_PLUG)),
             charger_kwh=charger_kwh,
         )
 
@@ -640,7 +637,6 @@ class ChargerTracker:
         params = ChargerParams(
             charger_key=self.subentry_id,
             charger_name=self.name,
-            start_w=advanced.get(CONF_START_W, 500.0),
             stop_w=advanced.get(CONF_STOP_W, 100.0),
             min_session_kwh=advanced.get(CONF_MIN_SESSION_KWH, 0.2),
         )

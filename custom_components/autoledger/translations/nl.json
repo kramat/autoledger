@@ -71,7 +71,6 @@
             "longitude": "Lengtegraad (als er geen apparaattracker is)",
             "address": "Adres",
             "charging_state": "Laadstatus",
-            "plug_state": "Laadkabel aangesloten",
             "car_timestamp": "Tijd van de laatste melding van de auto",
             "days_to_service": "Dagen tot onderhoud (aftelling van de auto zelf)",
             "distance_to_service": "Afstand tot onderhoud (aftelling van de auto zelf)",
@@ -121,7 +120,6 @@
             "longitude": "Lengtegraad (als er geen apparaattracker is)",
             "address": "Adres",
             "charging_state": "Laadstatus",
-            "plug_state": "Laadkabel aangesloten",
             "car_timestamp": "Tijd van de laatste melding van de auto",
             "days_to_service": "Dagen tot onderhoud (aftelling van de auto zelf)",
             "distance_to_service": "Afstand tot onderhoud (aftelling van de auto zelf)",
@@ -194,7 +192,6 @@
             "advanced": {
               "name": "Sessieherkenning",
               "data": {
-                "start_w": "Laden boven",
                 "stop_w": "Niet laden onder",
                 "min_session_kwh": "Sessies negeren kleiner dan"
               }
@@ -216,7 +213,6 @@
             "advanced": {
               "name": "Sessieherkenning",
               "data": {
-                "start_w": "Laden boven",
                 "stop_w": "Niet laden onder",
                 "min_session_kwh": "Sessies negeren kleiner dan"
               }

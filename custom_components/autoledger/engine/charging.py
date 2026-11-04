@@ -21,7 +21,6 @@ FINALISING = "finalising"
 class ChargerParams:
     charger_key: str
     charger_name: str
-    start_w: float = 500.0
     stop_w: float = 100.0
     min_session_kwh: float = 0.2
     start_kwh: float = 0.05

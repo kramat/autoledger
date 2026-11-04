@@ -105,7 +105,7 @@ autoledger/
 └── hacs.json                      makes this repo a HACS integration repository
 ```
 
-One repository serves both installers: HACS reads `custom_components/` and `hacs.json`, the add-on store reads `repository.yaml` and `addon/`. A GitHub release tag (`v0.6.0`) is what HACS offers as an update.
+One repository serves both installers: HACS reads `custom_components/` and `hacs.json`, the add-on store reads `repository.yaml` and `addon/`. A GitHub release tag (for example `v1.0.0`) is what HACS offers as an update.
 
 ## Development
 

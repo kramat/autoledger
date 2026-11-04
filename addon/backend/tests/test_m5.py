@@ -180,3 +180,17 @@ def test_settings_language(client):
     saved = client.put(f"{API}/settings", json={**settings, "language": "nl"}).json()
     assert saved["language"] == "nl"
     assert client.put(f"{API}/settings", json={**settings, "language": "de"}).status_code == 422
+
+
+# --- Collector tracking (1.0.0) -------------------------------------------------
+
+
+def test_collector_data_marks_the_vehicle(client, vw_up):
+    from .test_ingest import event, send
+
+    assert vw_up["tracking"] == "manual"
+    send(client, event("odometer.reading", {"ts": "2026-11-02T12:00:00Z", "odometer_km": 41500}, vw_up["id"]))
+    vehicle = client.get(f"{API}/vehicles/{vw_up['id']}").json()
+    assert vehicle["tracking"] == "collector"
+    # Editing the vehicle in the GUI keeps it.
+    assert client.patch(f"{API}/vehicles/{vw_up['id']}", json={"plate": "AB-123-C"}).json()["tracking"] == "collector"

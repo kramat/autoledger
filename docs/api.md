@@ -38,7 +38,7 @@ Event envelope:
   "type": "trip.recorded",
   "vehicle_id": "0193f0aa-…",
   "source": "collector",
-  "collector_version": "0.6.0",
+  "collector_version": "1.0.0",
   "occurred_at": "2026-11-02T12:42:56Z",
   "payload": { }
 }

@@ -20,7 +20,6 @@ Prefix: `sensor.lynk_co_l6tcx2e73ne015159_lynk_co_`
 | `location` | `…_latitude` + `…_longitude` (or `device_tracker.lynk_co_l6tcx2e73ne015159_lynk_co_vehicle_tracker`) | 52.0893, 4.4003 |
 | `address` | `…_address` | "Duinmeierij 118, Leidschendam-Voorburg" |
 | `charging_state` | `…_charge_state` | Idle |
-| `plug_state` | `…_charger_connection_status` | Disconnected |
 | `running` | `binary_sensor.lynk_co_l6tcx2e73ne015159_lynk_co_vehicle_is_running` | off. Never seen as `on`, so live mode is **not** used. |
 | `car_timestamp` | `…_last_updated_by_car` | 2026-11-02T12:42:56.941Z |
 | Service countdown (shown in Maintenance) | `…_days_to_service`, `…_distance_to_service` | 654 days, 28 163 km |

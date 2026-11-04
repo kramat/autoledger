@@ -56,7 +56,6 @@ from .const import (
     CONF_POWER,
     CONF_PRICE,
     CONF_REFUEL_MIN_L,
-    CONF_START_W,
     CONF_STOP_W,
     CONF_SWITCH,
     CONF_THRESHOLDS,
@@ -76,7 +75,6 @@ from .const import (
     ROLE_LATITUDE,
     ROLE_LONGITUDE,
     ROLE_ODOMETER,
-    ROLE_PLUG,
     ROLE_TRACKER,
     ROLE_TRIP_METER,
     SUBENTRY_CHARGER,
@@ -99,7 +97,6 @@ SUGGESTIONS: dict[str, tuple[str, ...]] = {
     ROLE_LONGITUDE: ("_longitude",),
     ROLE_ADDRESS: ("_address",),
     ROLE_CHARGING: ("_charge_state", "_charging_state", "_charging_status", "_charging"),
-    ROLE_PLUG: ("_charger_connection_status", "_plug_status", "_plugged_in", "_charger_connected"),
     ROLE_CAR_TIMESTAMP: ("_last_updated_by_car", "_last_update"),
     ROLE_DAYS_TO_SERVICE: ("_days_to_service",),
     ROLE_DISTANCE_TO_SERVICE: ("_distance_to_service",),
@@ -363,7 +360,6 @@ def _vehicle_schema(vehicle_type: str, with_odometer: bool = False) -> vol.Schem
     fields[vol.Optional(ROLE_ADDRESS)] = _entity("sensor")
     if vehicle_type in ("PHEV", "BEV"):
         fields[vol.Optional(ROLE_CHARGING)] = _entity(["sensor", "binary_sensor"])
-        fields[vol.Optional(ROLE_PLUG)] = _entity(["sensor", "binary_sensor"])
     fields[vol.Optional(ROLE_CAR_TIMESTAMP)] = _entity("sensor")
     fields[vol.Optional(ROLE_DAYS_TO_SERVICE)] = _entity("sensor")
     fields[vol.Optional(ROLE_DISTANCE_TO_SERVICE)] = _entity("sensor")
@@ -472,7 +468,6 @@ class ChargerSubentryFlow(_AutoLedgerSubentryFlow):
                 vol.Required(CONF_ADVANCED): section(
                     vol.Schema(
                         {
-                            vol.Required(CONF_START_W, default=500): _number(0, 22000, 50, "W"),
                             vol.Required(CONF_STOP_W, default=100): _number(0, 5000, 10, "W"),
                             vol.Required(CONF_MIN_SESSION_KWH, default=0.2): _number(0, 10, 0.1, "kWh"),
                         }

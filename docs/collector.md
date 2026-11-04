@@ -32,7 +32,6 @@ A vehicle's mapping is changed with **Change entities**, a charger's with **Chan
 | `latitude`, `longitude` | no | a pair of sensors, used when there is no device tracker | Start and end points, zones |
 | `address` | no | sensor with a readable address | Trip labels ("Duinmeierij 118 → Albert Heijn"), the station of a detected refuel |
 | `charging_state` | PHEV/BEV, no | sensor or binary_sensor | Whether the car itself reported charging during a detected public charge |
-| `plug_state` | PHEV/BEV, no | sensor or binary_sensor (connected/disconnected) | Recorded in each snapshot (see diagnostics); not used for detection |
 | `car_timestamp` | no | sensor containing the car's own report time | Exact event times for cloud-based cars |
 | `days_to_service`, `distance_to_service` | no | sensors with the car's own service countdown (Lynk: `…_days_to_service`, `…_distance_to_service`) | Shown next to the maintenance schedules as a cross-check. Read at every snapshot and sent as `service.status` when they change; they do not trigger a snapshot. |
 | `fuel_price` | PHEV/ICE, no | sensor or input_number in €/L (for example from a fuel price integration) | Read when a refuel is detected: its state becomes the suggested price (`price_source: entity`). Values outside 0.30–10 €/L are ignored. Without it, the add-on suggests the price of your last refuel, or the default for the vehicle's fuel type from Settings. |
@@ -244,7 +243,7 @@ Under *Detection thresholds* and *Snapshot boost* in the vehicle's form:
 | `idle_min_pct` / `idle_min_l` | 1 % / 0.5 L | Thresholds for idle-consumption records |
 | `boost_service`, `boost_persons`, `boost_max_per_day` | — / — / 12 | [Snapshot boost](#snapshot-boost) |
 
-Charger subentry options, under *Session detection*: `stop_w` (default 100) and `min_session_kwh` (default 0.2). `start_w` (default 500) is offered as well but has no effect: a session starts on the counter alone. `fixed_price` is used when no price entity is mapped or it is unavailable. When neither is available, the add-on's fallback electricity price is used. The price source is stored with every price sample.
+Charger subentry options, under *Session detection*: `stop_w` (default 100) and `min_session_kwh` (default 0.2). A session starts on the counter alone, never on power. `fixed_price` is used when no price entity is mapped or it is unavailable. When neither is available, the add-on's fallback electricity price is used. The price source is stored with every price sample.
 
 ## Diagnostics
 
