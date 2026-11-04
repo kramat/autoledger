@@ -27,6 +27,9 @@ class ChargerParams:
     idle_after: timedelta = timedelta(minutes=10)
     finalise_after: timedelta = timedelta(minutes=5)
     update_every: timedelta = timedelta(minutes=15)
+    # A counter rise is judged by its average power over at least this long, so a burst of
+    # readings a fraction of a second apart does not look like a tiny charge or a huge one.
+    rate_window: timedelta = timedelta(minutes=1)
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,8 @@ class ChargeSessionMachine:
         state = state or {}
         self.state: str = state.get("state", IDLE)
         self.last_kwh: float | None = state.get("last_kwh")
+        last_ts = state.get("last_ts")  # when last_kwh was read; missing in state saved before 1.0.1
+        self.last_ts: datetime | None = datetime.fromisoformat(last_ts) if last_ts else None
         self.session: dict[str, Any] | None = state.get("session")
         low = state.get("power_low_since")
         self.power_low_since: datetime | None = datetime.fromisoformat(low) if low else None
@@ -54,6 +59,7 @@ class ChargeSessionMachine:
         return {
             "state": self.state,
             "last_kwh": self.last_kwh,
+            "last_ts": self.last_ts.isoformat() if self.last_ts else None,
             "session": self.session,
             "power_low_since": self.power_low_since.isoformat() if self.power_low_since else None,
         }
@@ -83,16 +89,35 @@ class ChargeSessionMachine:
     # --- inputs -----------------------------------------------------------
 
     def on_energy(self, ts: datetime, kwh: float, price: float, price_source: str) -> list[SessionEvent]:
-        """A new valid counter value (kWh) with the electricity price at that moment."""
+        """A new valid counter value (kWh) with the electricity price at that moment.
+
+        A rise slower than ``stop_w`` is the charger's standby use, not charging: it is
+        left out of the session and does not keep the session open (docs/collector.md#home-charge-detection).
+        """
         if self.last_kwh is None or kwh < self.last_kwh:
-            self.last_kwh = kwh  # first value, or the counter was reset
+            self._rebase(ts, kwh)  # first value, or the counter was reset
             return []
         delta = kwh - self.last_kwh
         if delta <= 0:
             return []
-        if self.session is None and delta < self.params.start_kwh:
-            return []  # standby blip: wait until it adds up
-        self.last_kwh = kwh
+        elapsed = (ts - self.last_ts) if self.last_ts else None
+        if elapsed is not None and elapsed < self.params.rate_window:
+            return []  # judge the rise over a full window
+        watts = delta / (elapsed.total_seconds() / 3600) * 1000 if elapsed else None
+        standby = watts is not None and watts < self.params.stop_w
+
+        if self.session is None:
+            if delta < self.params.start_kwh:
+                if standby and elapsed >= self.params.idle_after:
+                    self._rebase(ts, kwh)  # standby use: it never adds up to a session
+                return []  # wait until it adds up
+            if standby:
+                self._rebase(ts, kwh)
+                return []
+        elif standby:
+            self._rebase(ts, kwh)
+            return []
+        self._rebase(ts, kwh)
 
         if self.session is None:
             self.session = {
@@ -110,6 +135,9 @@ class ChargeSessionMachine:
         self._add(ts, delta, price, price_source)
         self.state = CHARGING
         return self._maybe_update(ts)
+
+    def _rebase(self, ts: datetime, kwh: float) -> None:
+        self.last_kwh, self.last_ts = kwh, ts
 
     def on_power(self, ts: datetime, watts: float | None) -> None:
         if watts is None or self.session is None:

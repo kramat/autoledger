@@ -300,3 +300,58 @@ def test_presence_hints_ignore_unavailable():
     assert presence_hint("unavailable", "home") is None
     assert presence_hint("home", "unknown") is None
     assert presence_hint("home", "home") is None
+
+
+def test_standby_trickle_after_a_full_battery_ends_the_session():
+    """The Shelly keeps drawing ~2.8 W after the car is full (4 Nov 2026): the session must still end."""
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-03T16:17:00")
+    kwh = 1003.1
+    machine.on_energy(t, kwh, 0.19, "entity")
+    events = []
+    for minute in range(1, 61):  # one hour at 2.1 kW, a reading every minute
+        t = ts("2026-11-03T16:17:00") + timedelta(minutes=minute)
+        kwh = round(kwh + 0.035, 6)
+        events += machine.on_energy(t, kwh, 0.19, "entity") + machine.tick(t)
+    last_charge = t
+    for minute in range(1, 18 * 60):  # then 18 hours of standby: +0.000046 kWh a minute
+        t = last_charge + timedelta(minutes=minute)
+        kwh = round(kwh + 0.000046, 6)
+        events += machine.on_energy(t, kwh, 0.19, "entity") + machine.tick(t)
+
+    assert [e.type for e in events].count("charge.started") == 1
+    [done] = [e for e in events if e.type == "charge.completed"]
+    assert done.payload["energy_kwh"] == pytest.approx(60 * 0.035, abs=0.001)
+    assert done.payload["end_ts"] == last_charge.isoformat()
+    assert not machine.active  # 18 h of standby (~0.05 kWh) never became a session
+
+
+def test_burst_readings_are_judged_over_a_minute():
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-03T16:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    machine.on_energy(t + timedelta(minutes=1), 1000.06, 0.19, "entity")  # 3.6 kW: started
+    assert machine.active
+    # Two readings 0.07 s apart (as the Shelly sometimes sends) are not a separate rise.
+    machine.on_energy(t + timedelta(minutes=2), 1000.095, 0.19, "entity")
+    assert machine.on_energy(t + timedelta(minutes=2, milliseconds=70), 1000.0951, 0.19, "entity") == []
+    machine.on_energy(t + timedelta(minutes=3), 1000.13, 0.19, "entity")
+    assert machine.energy_kwh == pytest.approx(0.13)
+
+
+def test_state_saved_before_standby_handling_still_completes():
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-03T16:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    machine.on_energy(t + timedelta(minutes=5), 1001.0, 0.19, "entity")
+    old = machine.to_dict()
+    del old["last_ts"]  # Collector 1.0.0 did not store it
+    machine = ChargeSessionMachine(SHELLY, old)
+    t2 = t + timedelta(hours=10)
+    events, kwh = [], 1001.03
+    for minute in range(60):
+        kwh = round(kwh + 0.000046, 6)
+        moment = t2 + timedelta(minutes=minute)
+        events += machine.on_energy(moment, kwh, 0.19, "entity") + machine.tick(moment)
+    assert [e.type for e in events].count("charge.completed") == 1 and "charge.started" not in [e.type for e in events]
+    assert not machine.active

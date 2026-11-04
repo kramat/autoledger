@@ -121,6 +121,7 @@ FINALISING ──(counter rises again)──► CHARGING           (same session
 - **Vehicle attribution.** The session goes to the charger's assigned vehicle. Without one, the session is still recorded and lands in the review inbox.
 - **Battery %.** `soc_start` is the battery % of the vehicle's last snapshot at or before the session's start. `soc_end` comes from the first snapshot after the end, up to 12 h later, because cloud cars report late. These values feed the [kWh-per-% learning](costs.md#kwh-per-percent).
 - **Persistence.** The open session, its last counter value and its running cost are written to the Store on every change. Energy delivered while HA was down is in the counter and is counted at the next start. `charge.updated` events go out every 15 min.
+- **Standby use.** A counter rise is judged by its average power over at least a minute. A rise slower than `stop_w` (default 100 W) is the charger's own standby use, for example the ~3 W a Shelly EV charger draws after the car is full: it is not added to a session and does not keep one open, and without a session it never adds up to a new one.
 - Sessions below `min_session_kwh` (default 0.2) are discarded, since those are standby blips.
 
 ## External (public) charge detection

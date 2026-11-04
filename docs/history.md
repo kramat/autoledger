@@ -106,6 +106,7 @@ AutoLedger was built in five milestones between 1 and 4 November 2026, each endi
 - **0.5.2:** the app icon, as the add-on's `icon.png` / `logo.png` and the Collector's `brand/` images (shown by HA 2026.3 and later).
 - **0.6.0:** Dutch for the whole interface (a small built-in `t()` with type-checked texts), the API messages (`Accept-Language`), the add-on options and the Collector (`translations/nl.json`), with a language setting that defaults to the browser's language.
 - **1.0.0:** the documentation rewritten to describe the finished product (checked against the code), vehicles marked as Collector vehicles when the Collector delivers their data (migration 0006 fixes existing ones), and the unused charger option `start_w` and vehicle role `plug_state` removed.
+- **Collector 1.0.1:** on the real installation the first night charge never ended: after the car was full the Shelly drew about 2.8 W, and every tiny counter rise kept the session open. A rise slower than `stop_w` now counts as standby.
 
 ## Ideas that were not built
 

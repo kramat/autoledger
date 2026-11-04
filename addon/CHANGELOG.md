@@ -1,5 +1,12 @@
 # Changelog
 
+## Collector 1.0.1
+
+- A home charge session now ends when the car is full even if the charger keeps drawing a few watts on standby.
+  Before, every tiny rise of the kWh counter kept the session open, so it never ended. A counter rise slower than
+  *Not charging below* (default 100 W) now counts as standby: it is not part of a session and cannot start one.
+  A session that is open when you update ends by itself within about 15 minutes.
+
 ## 1.0.0
 
 The first complete release: everything in the [history](https://github.com/kramat/autoledger/blob/main/docs/history.md)
