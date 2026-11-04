@@ -147,4 +147,4 @@ For frontend work with hot reload, run `npm run dev` next to the dev server. Vit
 
 ## License
 
-MIT (to be added).
+[MIT](LICENSE) © 2026 Bart Kramer
