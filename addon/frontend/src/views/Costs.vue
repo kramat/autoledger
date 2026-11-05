@@ -7,7 +7,7 @@ import RecordDialog from '../components/RecordDialog.vue'
 import { defaultVehicleId, vehicleField, type Field } from '../components/fields'
 import { fmtDate, isoDate, money } from '../format'
 import { t } from '../i18n'
-import { EXPENSE_CATEGORIES, label, RECURRENCES } from '../labels'
+import { EXPENSE_CATEGORIES, label, RECURRENCES, SPLITS } from '../labels'
 import { activeVehicles, state, vehicleName } from '../store'
 import { useCrud } from '../useCrud'
 
@@ -20,10 +20,19 @@ function repeats(e: Expense): string {
   return t('costs.repeatsUntil', { recurrence: base, date: fmtDate(e.end_date) })
 }
 
+function vehicles(e: Expense): string {
+  if (!e.split) return vehicleName(e.vehicle_id ?? '')
+  const names = e.split_vehicles
+    .map((s) => vehicleName(s.vehicle_id) + (e.split === 'percent' && s.percent != null ? ` ${s.percent}%` : ''))
+    .join(', ')
+  return `${names} · ${label(SPLITS, e.split)}`
+}
+
 const columns = computed<Column<Expense>[]>(() => [
   { key: 'date', label: t('costs.columns.date'), value: (e) => fmtDate(e.date) },
-  ...(!state.vehicleId
-    ? [{ key: 'vehicle', label: t('costs.columns.vehicle'), value: (e: Expense) => vehicleName(e.vehicle_id) }]
+  // With one vehicle selected the column is only needed to show which costs are shared.
+  ...(!state.vehicleId || crud.items.value.some((e) => e.split)
+    ? [{ key: 'vehicle', label: t('costs.columns.vehicle'), wrap: true, value: vehicles }]
     : []),
   { key: 'category', label: t('costs.columns.category'), value: (e) => label(EXPENSE_CATEGORIES, e.category) },
   { key: 'amount', label: t('costs.columns.amount'), num: true, value: (e) => money(e.amount) },
@@ -33,9 +42,27 @@ const columns = computed<Column<Expense>[]>(() => [
 ])
 
 const recurring = (values: Record<string, unknown>) => values.recurrence != null
+const isShared = (values: Record<string, unknown>) => values.split != null
+
+// Vehicles a cost can be split over: the active ones, and archived ones it was already split over.
+function shareOptions() {
+  const chosen = new Set(((crud.dialog.value?.initial.split_vehicles ?? []) as Expense['split_vehicles'])
+    .map((s) => s.vehicle_id))
+  return state.vehicles
+    .filter((v) => !v.archived_at || chosen.has(v.id))
+    .map((v) => ({ value: v.id, label: v.name }))
+}
 
 const fields = computed<Field[]>(() => [
-  vehicleField(),
+  ...(activeVehicles.value.length > 1 || crud.dialog.value?.initial.split
+    ? [{ key: 'split', label: t('costs.fields.split'), type: 'select' as const, options: SPLITS }]
+    : []),
+  { ...vehicleField(), show: (values: Record<string, unknown>) => !isShared(values) },
+  {
+    key: 'split_vehicles', label: t('costs.fields.splitVehicles'), type: 'shares', required: true,
+    options: shareOptions(), show: isShared, percent: (values) => values.split === 'percent',
+    hint: t('costs.fields.splitVehiclesHint'),
+  },
   {
     key: 'category', label: t('costs.fields.category'), type: 'select', options: EXPENSE_CATEGORIES, required: true,
     half: true,
@@ -49,7 +76,10 @@ const fields = computed<Field[]>(() => [
 ])
 
 function add(): void {
-  crud.openCreate({ vehicle_id: defaultVehicleId(), date: isoDate(new Date()), category: 'insurance', recurrence: null })
+  crud.openCreate({
+    vehicle_id: defaultVehicleId(), date: isoDate(new Date()), category: 'insurance', recurrence: null, split: null,
+    split_vehicles: [],
+  })
 }
 </script>
 

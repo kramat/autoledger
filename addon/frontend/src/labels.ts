@@ -32,6 +32,7 @@ export const MAINTENANCE_CATEGORIES = options('maintenanceCategories',
 export const EXPENSE_CATEGORIES = options('expenseCategories',
   ['insurance', 'road_tax', 'parking', 'tolls', 'car_wash', 'fine', 'accessories', 'lease', 'subscription', 'other'])
 export const RECURRENCES = options('recurrences', [null, 'monthly', 'quarterly', 'yearly'], (v) => v ?? 'once')
+export const SPLITS = options('splits', [null, 'equal', 'km', 'percent'], (v) => v ?? 'single')
 export const CHARGE_KINDS = options('chargeKinds', ['home', 'public', 'manual'])
 export const PRICE_MODES = options('priceModes', ['per_kwh', 'total', 'free', 'samples'])
 export const TRIP_KINDS = options('tripKinds', ['one_way', 'round_trip'])

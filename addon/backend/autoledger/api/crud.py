@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..book import vehicle_clause
 from ..db import UTCDateTime, get_db, utcnow
 from ..ledger import local_midnight
 from ..models import Vehicle
@@ -47,11 +48,14 @@ def field_error(field: str, message: str) -> RequestValidationError:
 
 def check_vehicle(db: Session, data: dict) -> None:
     vehicle_id = data.get("vehicle_id")
-    if vehicle_id is None:
-        return
-    vehicle = db.get(Vehicle, vehicle_id)
-    if vehicle is None or vehicle.deleted_at is not None:
-        raise field_error("vehicle_id", "Unknown vehicle")
+    if vehicle_id is not None:
+        vehicle = db.get(Vehicle, vehicle_id)
+        if vehicle is None or vehicle.deleted_at is not None:
+            raise field_error("vehicle_id", "Unknown vehicle")
+    for share in data.get("split_vehicles") or []:
+        vehicle = db.get(Vehicle, share["vehicle_id"])
+        if vehicle is None or vehicle.deleted_at is not None:
+            raise field_error("split_vehicles", "Unknown vehicle")
 
 
 def filtered_query(model, time_field: str | None, request: Request, vehicle_id, from_, to, include_deleted):
@@ -59,7 +63,7 @@ def filtered_query(model, time_field: str | None, request: Request, vehicle_id, 
     if not include_deleted:
         stmt = stmt.where(model.deleted_at.is_(None))
     if vehicle_id and hasattr(model, "vehicle_id"):
-        stmt = stmt.where(model.vehicle_id == vehicle_id)
+        stmt = stmt.where(vehicle_clause(model, vehicle_id))
     if time_field:
         column = getattr(model, time_field)
         tz = request.app.state.config.tz

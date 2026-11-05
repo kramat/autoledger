@@ -52,6 +52,7 @@ export default {
     removed: '{name} removed',
     pending: 'added when saved',
   },
+  shares: { total: 'Total {total} % (must be 100 %)' },
   labels: {
     vehicleTypes: { ICE: 'Fuel (ICE)', PHEV: 'Plug-in hybrid (PHEV)', BEV: 'Electric (BEV)' },
     fuelTypes: { petrol: 'Petrol', diesel: 'Diesel', lpg: 'LPG', none: 'None' },
@@ -77,6 +78,12 @@ export default {
       other: 'Other',
     },
     recurrences: { once: 'One-off', monthly: 'Every month', quarterly: 'Every quarter', yearly: 'Every year' },
+    splits: {
+      single: 'One vehicle',
+      equal: 'Shared, split equally',
+      km: 'Shared, by km driven',
+      percent: 'Shared, fixed percentages',
+    },
     chargeKinds: { home: 'Home', public: 'Public', manual: 'Other' },
     priceModes: {
       per_kwh: 'Price per kWh',

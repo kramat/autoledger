@@ -20,6 +20,7 @@ ExpenseCategory = Literal[
     "accessories", "lease", "subscription", "other",
 ]
 Recurrence = Literal["monthly", "quarterly", "yearly"]
+ExpenseSplit = Literal["equal", "km", "percent"]
 
 
 class InModel(BaseModel):
@@ -226,22 +227,47 @@ class CarServiceOut(BaseModel):
 # --- Expenses -------------------------------------------------------------
 
 
-class ExpenseIn(InModel):
+class ExpenseShare(InModel):
     vehicle_id: str
+    percent: float | None = Field(None, gt=0, le=100)  # split "percent" only
+
+
+class ExpenseIn(InModel):
+    # vehicle_id for a cost of one vehicle; split + split_vehicles for a shared one (docs/costs.md#shared-costs).
+    vehicle_id: str | None = None
     category: ExpenseCategory = "other"
     amount: float = Field(ge=0)
     date: dt.date
     recurrence: Recurrence | None = None
     end_date: dt.date | None = None
+    split: ExpenseSplit | None = None
+    split_vehicles: list[ExpenseShare] | None = None
     note: str | None = None
 
     @model_validator(mode="after")
-    def _check_dates(self) -> "ExpenseIn":
+    def _check(self) -> "ExpenseIn":
         if self.end_date is not None:
             if self.recurrence is None:
                 raise ValueError("end_date is only used for recurring expenses")
             if self.end_date < self.date:
                 raise ValueError("end_date must be on or after date")
+        if self.split is None:
+            if self.vehicle_id is None:
+                raise ValueError("Choose a vehicle")
+            self.split_vehicles = []
+            return self
+        self.vehicle_id = None
+        shares = list({s.vehicle_id: s for s in self.split_vehicles or []}.values())
+        if len(shares) < 2:
+            raise ValueError("Choose at least two vehicles to share the cost")
+        if self.split == "percent":
+            if any(s.percent is None for s in shares):
+                raise ValueError("Give a percentage for every vehicle")
+            if abs(sum(s.percent for s in shares) - 100) > 0.01:
+                raise ValueError("The percentages must add up to 100")
+        else:
+            shares = [ExpenseShare(vehicle_id=s.vehicle_id) for s in shares]
+        self.split_vehicles = shares
         return self
 
 

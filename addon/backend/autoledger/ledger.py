@@ -3,7 +3,7 @@
 Formulas are documented in docs/costs.md.
 """
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from itertools import pairwise
@@ -77,6 +77,24 @@ class ExpenseData:
     amount: float
     recurrence: str | None = None
     end_date: date | None = None
+    # A shared cost: this vehicle's share (0..1) per calendar month, by the month's first day.
+    # A month that is not in it has no share. None: the whole cost belongs to the vehicle.
+    shares: dict[date, float] | None = None
+
+    def share(self, month: date) -> float:
+        return 1.0 if self.shares is None else self.shares.get(month, 0.0)
+
+
+def expense_months(expense: ExpenseData, today: date) -> list[date]:
+    """First days of the months an expense counts in (up to the current month for a recurring one)."""
+    if expense.recurrence is None:
+        return [month_start(expense.date)]
+    last = month_start(min(expense.end_date or today, today))
+    months, month = [], month_start(expense.date)
+    while month <= last:
+        months.append(month)
+        month = add_months(month, 1)
+    return months
 
 
 @dataclass(frozen=True)
@@ -367,10 +385,11 @@ def expense_in_range(expense: ExpenseData, start: date, end: date, today: date) 
 
     A recurring expense of amount A every n months adds A / n to each month from
     its start date until its end date (or until the current month), pro rata
-    for months that are only partly inside the range.
+    for months that are only partly inside the range. A shared expense counts
+    with the vehicle's share of each month.
     """
     if expense.recurrence is None:
-        return expense.amount if start <= expense.date < end else 0.0
+        return expense.amount * expense.share(month_start(expense.date)) if start <= expense.date < end else 0.0
 
     per_month = expense.amount / RECURRENCE_MONTHS[expense.recurrence]
     last = min(expense.end_date or today, today)
@@ -380,9 +399,50 @@ def expense_in_range(expense: ExpenseData, start: date, end: date, today: date) 
         next_month = add_months(month, 1)
         overlap = (min(next_month, end) - max(month, start)).days
         if overlap > 0:
-            total += per_month * overlap / (next_month - month).days
+            total += per_month * expense.share(month) * overlap / (next_month - month).days
         month = next_month
     return total
+
+
+def split_shares(
+    split: str,
+    months: Iterable[date],
+    vehicle_id: str,
+    members: dict[str, tuple[date, date | None]],
+    percents: dict[str, float] | None = None,
+    km: Callable[[str, date, date], float] | None = None,
+) -> dict[date, float]:
+    """One vehicle's share per month of a cost shared by ``members``.
+
+    ``members`` maps each vehicle to the dates it takes part (its start date, and
+    the day it was archived or None); a vehicle counts in a month it is part of
+    for at least one day. ``equal`` divides by the vehicles taking part,
+    ``percent`` uses the fixed percentages scaled to the vehicles taking part, and
+    ``km`` divides by the distance ``km(vehicle, start, end)`` each drove in the
+    month (for a one-off cost: the 12 months up to and including its month),
+    equally when none of them drove.
+    """
+    months = list(months)
+    one_off = len(months) == 1 and split == "km"
+    shares: dict[date, float] = {}
+    for month in months:
+        next_month = add_months(month, 1)
+        taking_part = [
+            vid for vid, (first, last) in members.items()
+            if first < next_month and (last is None or last >= month)
+        ]
+        if vehicle_id not in taking_part:
+            continue
+        if split == "percent":
+            weights = {vid: (percents or {}).get(vid, 0.0) for vid in taking_part}
+        elif split == "km" and km is not None:
+            window_start = add_months(month, -11) if one_off else month
+            weights = {vid: max(km(vid, window_start, next_month), 0.0) for vid in taking_part}
+        else:
+            weights = {}
+        total = sum(weights.values())
+        shares[month] = weights[vehicle_id] / total if total > 0 else 1 / len(taking_part)
+    return shares
 
 
 def _month_fraction(start: date, end: date) -> float:
@@ -700,6 +760,22 @@ def cost_trips(
 # --- Per-vehicle book -----------------------------------------------------
 
 
+def odometer_points(
+    tz: ZoneInfo,
+    start_date: date,
+    start_odometer_km: float,
+    readings: Iterable[OdometerData] = (),
+    refuels: Iterable[RefuelData] = (),
+    maintenance: Iterable[MaintenanceData] = (),
+) -> tuple[list[OdoPoint], int]:
+    """A vehicle's known odometer values in time order, and the number dropped as going backwards."""
+    raw_points = [OdoPoint(local_midnight(start_date, tz), start_odometer_km)]
+    raw_points += [OdoPoint(r.ts, r.odometer_km) for r in readings]
+    raw_points += [OdoPoint(r.ts, r.odometer_km) for r in refuels if r.odometer_km is not None]
+    raw_points += [OdoPoint(local_noon(m.date, tz), m.odometer_km) for m in maintenance if m.odometer_km is not None]
+    return build_odometer_points(raw_points)
+
+
 class VehicleBook:
     """All records of one vehicle, with period calculations."""
 
@@ -739,15 +815,9 @@ class VehicleBook:
             before[-1].total / before[-1].litres if before else default_l_price,
         )
 
-        raw_points = [OdoPoint(local_midnight(start_date, tz), start_odometer_km)]
-        raw_points += [OdoPoint(r.ts, r.odometer_km) for r in readings]
-        raw_points += [OdoPoint(r.ts, r.odometer_km) for r in self.refuels if r.odometer_km is not None]
-        raw_points += [
-            OdoPoint(local_noon(m.date, tz), m.odometer_km)
-            for m in self.maintenance
-            if m.odometer_km is not None
-        ]
-        self.points, self.dropped_points = build_odometer_points(raw_points)
+        self.points, self.dropped_points = odometer_points(
+            tz, start_date, start_odometer_km, readings, self.refuels, self.maintenance
+        )
         self.intervals = fuel_intervals(self.refuels)
 
     @property

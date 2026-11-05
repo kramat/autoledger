@@ -15,6 +15,9 @@ export default {
     receipt: 'Receipt',
   },
   fields: {
+    split: 'For',
+    splitVehicles: 'Shared by',
+    splitVehiclesHint: 'The amount is the whole bill; each vehicle counts its part',
     category: 'Category',
     amount: 'Amount',
     amountHint: 'For a recurring cost: the amount per period, e.g. per year',
@@ -26,6 +29,7 @@ export default {
   },
   empty: 'No costs yet. Add insurance, road tax, parking, tolls and other costs here.',
   spreadNote:
-    'Recurring costs are spread over the months they cover: a yearly insurance of 600 counts as 50 per month, up to the current month.',
+    'Recurring costs are spread over the months they cover: a yearly insurance of 600 counts as 50 per month, up to the current month. ' +
+    'A shared cost is divided each month over the vehicles that were on the road then: equally, by the km each drove that month, or by fixed percentages.',
   dialogs: { add: 'Add cost', edit: 'Edit cost' },
 }

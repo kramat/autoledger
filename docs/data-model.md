@@ -25,7 +25,7 @@ Records that can be created automatically (`trips`, `idle_records`, `charge_sess
 
 Money (in the currency from Settings) and quantities are stored as `REAL`. Derived values are rounded on calculation (litres 3 decimals, prices 4, totals 2), and figures are rounded again for display. Timestamps are fixed-width UTC strings (`2026-11-02T12:42:56.941000Z`), so sorting the text sorts by time.
 
-The schema is built by migrations 0001 (vehicles, refuels, odometer readings, maintenance, expenses, settings) to 0005 (attachments and depreciation).
+The schema is built by migrations 0001 (vehicles, refuels, odometer readings, maintenance, expenses, settings) to 0007 (shared expenses).
 
 ## Tables
 
@@ -54,7 +54,7 @@ The schema is built by migrations 0001 (vehicles, refuels, odometer readings, ma
 `vehicle_id`, `name`, `category`, `interval_months`, `interval_km`, `last_done_date`, `last_done_km`, `remind_before_days` (30), `remind_before_km` (1000), `active`, `note`. `last_done_*` is the starting point you enter; newer maintenance records of the schedule move it forward when it is read, so nothing derived is stored. The car's own service countdown (`service.status`) is kept in `settings` under `car_service:<vehicle_id>`.
 
 ### `expenses`
-`vehicle_id`, `category` (`insurance`/`road_tax`/`parking`/`tolls`/`car_wash`/`fine`/`accessories`/`lease`/`subscription`/`other`), `amount`, `date` (the start date when recurring), `recurrence` (NULL for one-off, or `monthly`/`quarterly`/`yearly`), `end_date` (recurring only), `note`. Receipts are in `attachments`.
+`vehicle_id` (NULL for a shared cost), `category` (`insurance`/`road_tax`/`parking`/`tolls`/`car_wash`/`fine`/`accessories`/`lease`/`subscription`/`other`), `amount`, `date` (the start date when recurring), `recurrence` (NULL for one-off, or `monthly`/`quarterly`/`yearly`), `end_date` (recurring only), `split` (NULL for one vehicle, or `equal`/`km`/`percent`), `split_vehicles` (JSON: `vehicle_id` and, for `percent`, `percent`, at least two; see [costs.md](costs.md#shared-costs)), `note`. Receipts are in `attachments`.
 
 ### `attachments`
 `resource` (`refuels`/`maintenance`/`expenses`), `record_id`, `filename`, `mime_type`, `size`, `sha256`. The file is `/data/attachments/<id>`. A record can have several. Deleting one is a soft delete; the file stays.

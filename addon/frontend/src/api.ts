@@ -243,13 +243,20 @@ export interface VehicleDue {
   items: (ScheduleDue & { category: string | null; interval_months: number | null; interval_km: number | null })[]
 }
 
-export interface Expense extends RecordBase {
+export interface ExpenseShare {
   vehicle_id: string
+  percent: number | null
+}
+
+export interface Expense extends RecordBase {
+  vehicle_id: string | null // null for a shared cost
   category: string
   amount: number
   date: string
   recurrence: 'monthly' | 'quarterly' | 'yearly' | null
   end_date: string | null
+  split: 'equal' | 'km' | 'percent' | null
+  split_vehicles: ExpenseShare[]
   note: string | null
   attachments: Attachment[]
 }

@@ -10,6 +10,7 @@ AutoLedger was built in five milestones between 1 and 4 November 2026, each endi
 | **M4: Insight** | 0.4.0 | Reports (period, compare, trends), maintenance schedules and reminders, XLSX export, JSON backup/restore, CSV import |
 | **M5: Extras** | 0.5.0 | Snapshot boost, receipt photo attachments, depreciation, fuel price entity support |
 | Finishing | 0.5.1–1.0.0 | Layout for foldables and narrow screens, the app icon, the Dutch translation, documentation, 1.0 |
+| After 1.0 | 1.1.0 | Costs shared by several vehicles |
 
 ## M1: Add-on core (2 Nov 2026)
 
@@ -107,6 +108,10 @@ AutoLedger was built in five milestones between 1 and 4 November 2026, each endi
 - **0.6.0:** Dutch for the whole interface (a small built-in `t()` with type-checked texts), the API messages (`Accept-Language`), the add-on options and the Collector (`translations/nl.json`), with a language setting that defaults to the browser's language.
 - **1.0.0:** the documentation rewritten to describe the finished product (checked against the code), vehicles marked as Collector vehicles when the Collector delivers their data (migration 0006 fixes existing ones), and the unused charger option `start_w` and vehicle role `plug_state` removed.
 - **Collector 1.0.1:** on the real installation the first night charge never ended: after the car was full the Shelly drew about 2.8 W, and every tiny counter rise kept the session open. A rise slower than `stop_w` now counts as standby.
+
+## 1.1.0 (5 Nov 2026)
+
+- **Shared costs:** one bill for several cars (road assistance for the household) split equally, by km driven or with fixed percentages, per month over the vehicles in use then. Kept in `expenses` (`vehicle_id` NULL, `split`, `split_vehicles`; migration 0007), so the Costs page, attachments, export and backup handle it without a separate record type.
 
 ## Ideas that were not built
 

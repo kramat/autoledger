@@ -26,6 +26,8 @@ EXACT: dict[str, str] = {
     "Attach a photo (JPEG, PNG, WebP, HEIC) or a PDF": "Voeg een foto (JPEG, PNG, WebP, HEIC) of een pdf toe",
     "Attachment not found": "Bijlage niet gevonden",
     "Choose a vehicle": "Kies een voertuig",
+    "Choose at least two vehicles to share the cost": "Kies minstens twee voertuigen om de kosten over te verdelen",
+    "Give a percentage for every vehicle": "Vul voor elk voertuig een percentage in",
     "Choose two different trips of the same vehicle": "Kies twee verschillende ritten van hetzelfde voertuig",
     "Depreciation needs a purchase price, a purchase date and a resale date":
         "Voor afschrijving zijn een aankoopprijs, een aankoopdatum en een verkoopdatum nodig",
@@ -48,7 +50,8 @@ EXACT: dict[str, str] = {
     "The file is larger than 20 MB": "Het bestand is groter dan 20 MB",
     "The file of this attachment is missing (restored from a backup without files?)":
         "Het bestand van deze bijlage ontbreekt (teruggezet uit een back-up zonder bestanden?)",
-    "The resale date must be after the purchase date": "De verkoopdatum moet na de aankoopdatum liggen",
+    "The percentages must add up to 100": "De percentages moeten samen 100 zijn",
+    "The resale date must be after the purchase date":"De verkoopdatum moet na de aankoopdatum liggen",
     "The token can only be managed from the AutoLedger panel": "Het token kan alleen in het AutoLedger-paneel worden beheerd",
     "This backup was made by a newer AutoLedger. Update the add-on first.":
         "Deze back-up is gemaakt met een nieuwere AutoLedger. Werk eerst de add-on bij.",

@@ -57,6 +57,11 @@ def table(
     for row in rows:
         data = schema.model_validate(row).model_dump()
         data["vehicle"] = names.get(data.get("vehicle_id"), "")
+        if data.get("split_vehicles"):
+            data["split_vehicles"] = "; ".join(
+                names.get(s["vehicle_id"], s["vehicle_id"]) + (f" {s['percent']:g}%" if s.get("percent") else "")
+                for s in data["split_vehicles"]
+            )
         result.append([data.get(c) for c in columns])
     return columns, result
 

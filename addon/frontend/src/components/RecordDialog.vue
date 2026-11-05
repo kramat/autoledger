@@ -23,13 +23,27 @@ const emit = defineEmits<{ close: []; changed: [] }>()
 const pending = ref<File[]>([])
 const recordId = typeof props.initial.id === 'string' ? props.initial.id : null
 
+interface Share {
+  vehicle_id: string
+  percent: number | null
+}
+
 function toForm(field: Field, value: unknown): unknown {
+  if (field.type === 'shares') {
+    // Only vehicles that can be picked: a deleted vehicle drops out of the split.
+    const known = new Set(field.options?.map((o) => o.value))
+    return ((value as Share[] | null) ?? []).filter((s) => known.has(s.vehicle_id)).map((s) => ({ ...s }))
+  }
   if (value === null || value === undefined) return field.type === 'checkbox' ? false : field.type === 'select' ? null : ''
   if (field.type === 'datetime') return toLocalInput(String(value))
   return value
 }
 
 function fromForm(field: Field, value: unknown): unknown {
+  if (field.type === 'shares') {
+    const percent = field.percent?.(values) ?? false
+    return (value as Share[]).map((s) => ({ vehicle_id: s.vehicle_id, percent: percent ? s.percent : null }))
+  }
   if (field.type === 'checkbox') return Boolean(value)
   if (field.type === 'select') return value ?? null
   if (value === '' || value === null || value === undefined) return null
@@ -47,6 +61,31 @@ const message = ref('')
 const busy = ref(false)
 
 const visibleFields = computed(() => props.fields.filter((f) => !f.show || f.show(values)))
+
+function shares(key: string): Share[] {
+  return values[key] as Share[]
+}
+
+function share(key: string, vehicleId: string | null): Share | undefined {
+  return shares(key).find((s) => s.vehicle_id === vehicleId)
+}
+
+function toggleShare(key: string, vehicleId: string | null, on: boolean): void {
+  const list = shares(key)
+  const index = list.findIndex((s) => s.vehicle_id === vehicleId)
+  if (on && index < 0 && vehicleId) list.push({ vehicle_id: vehicleId, percent: null })
+  if (!on && index >= 0) list.splice(index, 1)
+}
+
+function setPercent(key: string, vehicleId: string | null, raw: string): void {
+  const item = share(key, vehicleId)
+  if (item) item.percent = raw === '' ? null : Number(raw)
+}
+
+function percentTotal(key: string): string {
+  const total = shares(key).reduce((sum, s) => sum + (s.percent ?? 0), 0)
+  return String(Math.round(total * 100) / 100)
+}
 
 async function submit(): Promise<void> {
   errors.value = {}
@@ -106,6 +145,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <input type="checkbox" v-model="values[f.key]" />
             <span>{{ f.label }}<small v-if="f.hint" class="hint checkbox-hint">{{ f.hint }}</small></span>
           </label>
+          <div v-else-if="f.type === 'shares'" class="field shares" :class="{ invalid: errors[f.key] }" role="group"
+            :aria-label="f.label">
+            <span>{{ f.label }}<template v-if="f.required"> *</template></span>
+            <div v-for="o in f.options" :key="String(o.value)" class="share-row">
+              <label class="checkbox">
+                <input type="checkbox" :checked="!!share(f.key, o.value)"
+                  @change="toggleShare(f.key, o.value, ($event.target as HTMLInputElement).checked)" />
+                <span>{{ o.label }}</span>
+              </label>
+              <label v-if="f.percent?.(values) && share(f.key, o.value)" class="share-percent">
+                <input type="number" min="0" max="100" step="any" :aria-label="`${o.label} %`"
+                  :value="share(f.key, o.value)?.percent ?? ''"
+                  @input="setPercent(f.key, o.value, ($event.target as HTMLInputElement).value)" />
+                <span>%</span>
+              </label>
+            </div>
+            <small v-if="errors[f.key]" class="error">{{ errors[f.key] }}</small>
+            <small v-else-if="f.percent?.(values)" class="hint">
+              {{ t('common.shares.total', { total: percentTotal(f.key) }) }}
+            </small>
+            <small v-else-if="f.hint" class="hint">{{ f.hint }}</small>
+          </div>
           <label v-else class="field" :class="{ half: f.half, invalid: errors[f.key] }">
             <span>{{ f.label }}<template v-if="f.required"> *</template></span>
             <select v-if="f.type === 'select'" v-model="values[f.key]" :required="f.required">

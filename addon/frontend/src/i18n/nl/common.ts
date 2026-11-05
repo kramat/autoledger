@@ -64,6 +64,7 @@ const common: typeof en = {
     removed: '{name} weggehaald',
     pending: 'wordt toegevoegd bij opslaan',
   },
+  shares: { total: 'Totaal {total} % (moet 100 % zijn)' },
   labels: {
     vehicleTypes: { ICE: 'Brandstof (ICE)', PHEV: 'Plug-in hybride (PHEV)', BEV: 'Elektrisch (BEV)' },
     fuelTypes: { petrol: 'Benzine', diesel: 'Diesel', lpg: 'Lpg', none: 'Geen' },
@@ -89,6 +90,12 @@ const common: typeof en = {
       other: 'Overig',
     },
     recurrences: { once: 'Eenmalig', monthly: 'Elke maand', quarterly: 'Elk kwartaal', yearly: 'Elk jaar' },
+    splits: {
+      single: 'Eén voertuig',
+      equal: 'Gedeeld, gelijk verdeeld',
+      km: 'Gedeeld, naar gereden km',
+      percent: 'Gedeeld, vaste percentages',
+    },
     chargeKinds: { home: 'Thuis', public: 'Publiek', manual: 'Overig' },
     priceModes: {
       per_kwh: 'Prijs per kWh',

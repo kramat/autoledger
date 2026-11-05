@@ -75,7 +75,7 @@ Each resource supports `GET` (list), `GET /{id}`, `POST`, `PATCH /{id}` and `DEL
 | `/odometer-readings` | |
 | `/maintenance` | Maintenance records. A record can name its `schedule_id`; without one it counts for the schedules of its category. |
 | `/maintenance-schedules` | List items carry `due` (status `ok`/`soon`/`overdue`/`unknown`, `due_date`, `due_km`, `km_left`, `estimated_date`, `reason`, `days_left`). `GET /maintenance-schedules/due?vehicle_id=` gives the active schedules per vehicle, most urgent first, with `odometer_km`, `km_per_day` and the car's own `car_service` countdown. |
-| `/expenses` | One-off, or recurring with `recurrence` (`monthly`/`quarterly`/`yearly`) from `date` up to an optional `end_date` |
+| `/expenses` | One-off, or recurring with `recurrence` (`monthly`/`quarterly`/`yearly`) from `date` up to an optional `end_date`. A shared cost has `split` (`equal`/`km`/`percent`) and `split_vehicles` (`[{vehicle_id, percent}]`, percentages adding up to 100 for `percent`) instead of `vehicle_id`; `?vehicle_id=` also lists the shared costs the vehicle takes part in (see [costs.md](costs.md#shared-costs)) |
 | `/review-items` | `GET` lists open items with the current `record` (`?include_resolved=true` adds resolved ones, `?vehicle_id=` filters). `POST /review-items/{id}/resolve {action, values}` with action `update` (values are applied like a PATCH), `accept`, `delete` (the record) or `dismiss`. |
 
 List items of refuels, maintenance and expenses carry their `attachments`.

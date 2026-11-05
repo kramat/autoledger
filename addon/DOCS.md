@@ -8,7 +8,7 @@ AutoLedger keeps the books for your cars: every trip, charge, refuel, maintenanc
 2. Go to **Vehicles → Add vehicle**. For *Tracking starts on*, use the earliest date you have data for, together with the odometer value on that date. Reports start there.
 3. Check the currency and default prices under **Settings**.
 4. Add refuels under **Fuel**. Enter two of litres, total and price per litre; the third is calculated. Tick *Filled the tank completely* when you filled up: L/100 km is calculated from one full tank to the next.
-5. Add maintenance under **Maintenance**, and insurance, road tax, parking and so on under **Costs**. A recurring cost (for example a yearly insurance) is spread over the months it covers.
+5. Add maintenance under **Maintenance**, and insurance, road tax, parking and so on under **Costs**. A recurring cost (for example a yearly insurance) is spread over the months it covers. One bill for several cars, such as road assistance, is entered once with *For: Shared*: it is split equally, by km driven, or with fixed percentages.
 
 Older data can be entered with its original date, or imported from a spreadsheet (see [Data and backups](#data-and-backups)).
 

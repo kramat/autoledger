@@ -1,12 +1,16 @@
 """Load a vehicle's records from the database into a ledger ``VehicleBook``."""
 
+import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.orm import Session
 
-from .ledger import ChargeData, DepreciationData, ExpenseData, MaintenanceData, OdometerData, RefuelData, TripData, VehicleBook
+from .ledger import (
+    ChargeData, DepreciationData, ExpenseData, MaintenanceData, OdometerData, OdoPoint, RefuelData, TripData,
+    VehicleBook, distance_between, expense_months, local_midnight, odometer_points, split_shares,
+)
 from .models import ChargeSession, Expense, IdleRecord, MaintenanceRecord, OdometerReading, Refuel, Trip, Vehicle
 from .settings_store import get_settings
 
@@ -15,10 +19,58 @@ def today_local(tz: ZoneInfo) -> date:
     return datetime.now(tz).date()
 
 
+def vehicle_clause(model, vehicle_id: str):
+    """Records of the vehicle, including the shared expenses it takes part in."""
+    clause = model.vehicle_id == vehicle_id
+    if hasattr(model, "split_vehicles") and re.fullmatch(r"[\w-]+", vehicle_id):
+        clause = or_(clause, cast(model.split_vehicles, String).like(f'%"{vehicle_id}"%'))
+    return clause
+
+
 def _active(db: Session, model, vehicle_id: str):
     return db.scalars(
-        select(model).where(model.vehicle_id == vehicle_id, model.deleted_at.is_(None))
+        select(model).where(vehicle_clause(model, vehicle_id), model.deleted_at.is_(None))
     ).all()
+
+
+class _Distances:
+    """km each vehicle drove between two dates, for costs shared by km."""
+
+    def __init__(self, db: Session, tz: ZoneInfo) -> None:
+        self.db, self.tz = db, tz
+        self.points: dict[str, list[OdoPoint]] = {}
+
+    def __call__(self, vehicle_id: str, start: date, end: date) -> float:
+        if vehicle_id not in self.points:
+            vehicle = self.db.get(Vehicle, vehicle_id)
+            self.points[vehicle_id] = odometer_points(
+                self.tz, vehicle.start_date, vehicle.start_odometer_km,
+                [OdometerData(r.ts, r.odometer_km) for r in _active(self.db, OdometerReading, vehicle_id)],
+                [RefuelData(r.id, r.ts, r.litres, r.total, r.full_tank, r.odometer_km)
+                 for r in _active(self.db, Refuel, vehicle_id)],
+                [MaintenanceData(m.date, m.cost, m.odometer_km) for m in _active(self.db, MaintenanceRecord, vehicle_id)],
+            )[0]
+        return distance_between(self.points[vehicle_id], local_midnight(start, self.tz), local_midnight(end, self.tz))
+
+
+def expense_data(db: Session, expense: Expense, vehicle_id: str, tz: ZoneInfo, today: date,
+                 distances: "_Distances | None" = None) -> ExpenseData:
+    """An expense as it counts for ``vehicle_id``: in full, or its share of a shared cost."""
+    data = ExpenseData(expense.date, expense.amount, expense.recurrence, expense.end_date)
+    if expense.split is None:
+        return data
+    members: dict[str, tuple[date, date | None]] = {}
+    for share in expense.split_vehicles or []:
+        vehicle = db.get(Vehicle, share["vehicle_id"])
+        if vehicle is not None and vehicle.deleted_at is None:
+            archived = vehicle.archived_at.astimezone(tz).date() if vehicle.archived_at else None
+            members[vehicle.id] = (vehicle.start_date, archived)
+    shares = split_shares(
+        expense.split, expense_months(data, today), vehicle_id, members,
+        percents={s["vehicle_id"]: s.get("percent") or 0.0 for s in expense.split_vehicles or []},
+        km=distances or _Distances(db, tz),
+    )
+    return ExpenseData(data.date, data.amount, data.recurrence, data.end_date, shares)
 
 
 def _energy_override(record) -> float | None:
@@ -74,9 +126,11 @@ def depreciation_data(vehicle: Vehicle) -> DepreciationData | None:
 def load_book(db: Session, vehicle: Vehicle, tz: ZoneInfo, today: date | None = None) -> VehicleBook:
     settings = get_settings(db)
     fuel = vehicle.fuel_type if vehicle.fuel_type in ("petrol", "diesel", "lpg") else "petrol"
+    today = today or today_local(tz)
+    distances = _Distances(db, tz)
     return VehicleBook(
         tz=tz,
-        today=today or today_local(tz),
+        today=today,
         start_date=vehicle.start_date,
         start_odometer_km=vehicle.start_odometer_km,
         refuels=[
@@ -92,10 +146,7 @@ def load_book(db: Session, vehicle: Vehicle, tz: ZoneInfo, today: date | None = 
             MaintenanceData(m.date, m.cost, m.odometer_km)
             for m in _active(db, MaintenanceRecord, vehicle.id)
         ],
-        expenses=[
-            ExpenseData(e.date, e.amount, e.recurrence, e.end_date)
-            for e in _active(db, Expense, vehicle.id)
-        ],
+        expenses=[expense_data(db, e, vehicle.id, tz, today, distances) for e in _active(db, Expense, vehicle.id)],
         trips=[trip_data(t) for t in _active(db, Trip, vehicle.id)]
         + [idle_data(i) for i in _active(db, IdleRecord, vehicle.id)],
         depreciation=depreciation_data(vehicle),

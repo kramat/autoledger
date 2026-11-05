@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+- **Shared costs.** A bill that covers several cars, such as road assistance or a household insurance, is now
+  entered once. On **Costs**, choose *For: Shared* and tick the cars. Pick how to split it: equally, by the km each
+  car drove that month, or with fixed percentages. Each car's reports, cost per km and *Cost this month* sensor
+  count its share, and *All vehicles* counts the whole bill. When you archive a car or add one, the split follows
+  from that month on.
+- With one car selected, the Costs list also shows the shared costs it takes part in.
+
 ## Collector 1.0.1
 
 - A home charge session now ends when the car is full even if the charger keeps drawing a few watts on standby.

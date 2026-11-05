@@ -5,8 +5,11 @@ import { activeVehicles, state } from '../store'
 export interface Field {
   key: string
   label: string
-  type: 'text' | 'number' | 'date' | 'datetime' | 'select' | 'checkbox' | 'textarea' | 'color'
+  // shares: a list of vehicles to split a cost over, as [{vehicle_id, percent}].
+  type: 'text' | 'number' | 'date' | 'datetime' | 'select' | 'checkbox' | 'textarea' | 'color' | 'shares'
   options?: Option[]
+  // shares only: whether each vehicle gets a percentage.
+  percent?: (values: Record<string, unknown>) => boolean
   required?: boolean
   step?: string
   min?: number

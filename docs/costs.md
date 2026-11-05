@@ -151,6 +151,21 @@ A manual vehicle has no trips to spread fuel over. Its fuel cost is therefore co
 - Depreciation: `(purchase_price − resale_estimate) / months_between(purchase_date, resale_date)` per month, pro rata for partial months, so the months from purchase to resale add up to exactly the loss of value. It is counted from the vehicle's tracking start (`start_date`, or the purchase date if that is later) up to today included, and never after the resale date. It is shown as `depreciation_cost`, part of `total_cost`. It is off by default and is switched on per vehicle (`depreciation_enabled`), which needs a purchase price, purchase date and resale date.
   Example: bought for € 45 000 on 1 Jun 2022, resale € 15 000 on 1 Jun 2029: 84 months, € 357.14 per month. Tracked from 1 Oct 2026, the 2026 report on 3 November has October and 1–3 November: € 357.14 + € 35.71.
 
+## Shared costs
+
+One bill for several vehicles, such as road assistance for the whole household, is entered once with `split` and the vehicles it covers (`split_vehicles`). Each month every vehicle counts its share of what the bill adds to that month (the whole amount for a one-off cost, `A / n` for a recurring one):
+
+| `split` | Share of a vehicle in a month |
+|---|---|
+| `equal` | `1 / vehicles taking part` |
+| `km` | `km it drove / km all of them drove` in that month (for a one-off cost: the 12 months up to and including its month); equal when none of them drove |
+| `percent` | its percentage, scaled to the vehicles taking part (`60 / (60 + 40)`) |
+
+- A vehicle **takes part** in a month when it has at least one day in it between its tracking start (`start_date`) and the day it was archived. A car you sell and archive drops out from the next month on, and a new car joins in the month it starts, so the shares of the others change with it. A deleted vehicle no longer takes part.
+- The shares of each month add up to 1, so *All vehicles* shows the whole bill.
+- km come from the odometer values of each vehicle (readings, refuels and maintenance), as in [Distance for manual vehicles](#distance-for-manual-vehicles). The current month uses the km so far, so its split can still move.
+- Example: € 120 road assistance per year, by km. In October the Lynk drove 300 km and the VW Up 100 km: October's € 10 is € 7.50 for the Lynk and € 2.50 for the VW Up.
+
 ## Recalculation
 
 - Nothing derived is stored: every request replays the vehicle's records (a few thousand per year take milliseconds), so any change to a charge, refuel or trip is reflected everywhere at once.

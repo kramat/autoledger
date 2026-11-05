@@ -499,6 +499,38 @@ td.row-actions {
   color: var(--muted);
 }
 
+/* The vehicles a shared cost is split over, each with an optional percentage. */
+.share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.share-row .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-row .checkbox input {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+}
+
+.share-percent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-percent input {
+  width: 6.5em;
+  text-align: right;
+}
+
 .field .error,
 .notice.error {
   color: var(--danger);

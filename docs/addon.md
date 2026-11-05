@@ -116,6 +116,7 @@ Other costs, one list:
 - date, category, amount, repeats, note and receipts;
 - categories: insurance, road tax (*MRB*), parking, tolls, car wash, fine, accessories, lease, subscription, other;
 - **repeats**: one-off, monthly, quarterly or yearly. A recurring cost has the amount per period, a start date and an optional end date. It is spread over the months it covers: a yearly insurance of 600 counts as 50 per month.
+- **for**: one vehicle, or shared by several (with two or more vehicles): split equally, by km driven, or with fixed percentages. The amount is the whole bill; each vehicle counts its part of every month (see [costs.md](costs.md#shared-costs)). With one vehicle selected at the top, the list also shows the shared costs it takes part in, with the vehicles in the *Vehicle* column.
 
 Depreciation is set per vehicle (see [Vehicles](#vehicles)).
 

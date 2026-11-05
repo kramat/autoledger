@@ -126,12 +126,15 @@ class Expense(RecordMixin, Base):
     __tablename__ = "expenses"
     __table_args__ = (Index("ix_expenses_vehicle_date", "vehicle_id", "date"),)
 
-    vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"))
+    # NULL for a shared cost, which is split over split_vehicles (docs/costs.md#shared-costs).
+    vehicle_id: Mapped[str | None] = mapped_column(ForeignKey("vehicles.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(20))
     amount: Mapped[float] = mapped_column(Float)
     date: Mapped[dt.date] = mapped_column(Date)
     recurrence: Mapped[str | None] = mapped_column(String(10))
     end_date: Mapped[dt.date | None] = mapped_column(Date)
+    split: Mapped[str | None] = mapped_column(String(8))  # None (one vehicle) | equal | km | percent
+    split_vehicles: Mapped[list] = mapped_column(JSON, default=list)  # [{"vehicle_id", "percent"}]
     note: Mapped[str | None] = mapped_column(Text)
 
 
