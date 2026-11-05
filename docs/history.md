@@ -112,6 +112,7 @@ AutoLedger was built in five milestones between 1 and 4 November 2026, each endi
 ## 1.1.0 (5 Nov 2026)
 
 - **Shared costs:** one bill for several cars (road assistance for the household) split equally, by km driven or with fixed percentages, per month over the vehicles in use then. Kept in `expenses` (`vehicle_id` NULL, `split`, `split_vehicles`; migration 0007), so the Costs page, attachments, export and backup handle it without a separate record type.
+- **Collector 1.1.1:** a trip that ended outside every zone (Voorschoten, 5 Nov) was still a round trip from *Home*: the snapshot sanitizer treated "no zone" as a missing value and kept the previous zone. The place now follows the position.
 
 ## Ideas that were not built
 

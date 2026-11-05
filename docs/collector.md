@@ -64,6 +64,7 @@ Snapshot
 
 - The car timestamp is valid when it is at most 5 min in the future and later than the previous snapshot's.
 - Values that are `unavailable`, `unknown` or non-numeric are taken from the previous snapshot. So are physically impossible values: an odometer going down, a battery outside 0–100 %, or fuel below 0 or above the tank size plus 10 %. Each replacement of an impossible value is logged in the diagnostics' decisions.
+- The place follows the position. Only when the position is unknown are lat/lon, address and zone taken from the previous snapshot. A known position outside every zone has no zone, and an address that is missing is only kept while the position is the same.
 - A snapshot that differs from the previous one only in its time is dropped.
 - The first snapshot after setup is stored as the baseline. The last **committed** snapshot is persisted in the Store. Detectors always compare *new snapshot* against *last committed snapshot*. This delta-based design is why restarts and sparse data are handled correctly.
 

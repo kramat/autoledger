@@ -1,5 +1,11 @@
 # Changelog
 
+## Collector 1.1.1
+
+- A trip to a place outside your Home Assistant zones is now a one-way trip with that place as its end. Before, the
+  Collector kept the zone of the previous report, so every trip from home was a round trip from *Home*. Trips that
+  were recorded that way can be corrected with **Edit → Kind: One way** on the Trips page.
+
 ## 1.1.0
 
 - **Shared costs.** A bill that covers several cars, such as road assistance or a household insurance, is now

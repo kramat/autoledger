@@ -97,10 +97,17 @@ def sanitize(new: Snapshot, prev: Snapshot | None, tank_l: float | None) -> tupl
         if reason:
             notes.append(reason)
 
-    for name in ("odometer_km", "trip_meter_km", "battery_pct", "fuel_l", "lat", "lon", "address", "zone",
-                 "charging", "charger_kwh"):
+    for name in ("odometer_km", "trip_meter_km", "battery_pct", "fuel_l", "charging", "charger_kwh"):
         if getattr(new, name) is None:
             keep(name)
+
+    # The place follows the position. A known position outside every zone has no zone: keeping the previous
+    # one would put a car parked in another town at home.
+    if new.lat is None or new.lon is None:
+        for name in ("lat", "lon", "zone", "address"):
+            keep(name)
+    elif new.address is None and (new.lat, new.lon) == (prev.lat, prev.lon):
+        keep("address")
 
     if new.odometer_km is not None and prev.odometer_km is not None and new.odometer_km < prev.odometer_km:
         keep("odometer_km", f"odometer went down ({prev.odometer_km} → {new.odometer_km}), ignored")

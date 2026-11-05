@@ -57,6 +57,25 @@ def test_sanitize_keeps_last_valid_values():
     assert len(notes) == 2
 
 
+def test_sanitize_place_follows_the_position():
+    """5 Nov: parked in Voorschoten, outside every zone. The zone must not stay *Home*."""
+    home = snap("2026-11-05T09:00:00", lat=52.08941, lon=4.40034, zone="Home", address="Duinmeierij 97")
+    away = snap("2026-11-05T10:15:50", odometer_km=63469, lat=52.116455, lon=4.43386,
+                address="Veurseweg 180, Voorschoten")
+    clean, _ = sanitize(away, home, tank_l=51)
+    assert clean.zone is None and clean.address == "Veurseweg 180, Voorschoten"
+    trip = detect(home, clean, LYNK)[-1].payload
+    assert trip["kind"] == "one_way"
+
+    # Position unknown: the whole place is kept. Same position without an address: the address is kept.
+    lost = Snapshot(ts=ts("2026-11-05T10:30:00"))
+    assert sanitize(lost, home, tank_l=51)[0].place == home.place
+    quiet = Snapshot(ts=ts("2026-11-05T10:30:00"), lat=52.116455, lon=4.43386)
+    assert sanitize(quiet, clean, tank_l=51)[0].address == "Veurseweg 180, Voorschoten"
+    moved = Snapshot(ts=ts("2026-11-05T11:43:25"), lat=52.08929, lon=4.40001, zone="Home")
+    assert sanitize(moved, clean, tank_l=51)[0].address is None
+
+
 # --- Detection between snapshots ------------------------------------------
 
 
