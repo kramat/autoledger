@@ -30,6 +30,11 @@ class ChargerParams:
     # A counter rise is judged by its average power over at least this long, so a burst of
     # readings a fraction of a second apart does not look like a tiny charge or a huge one.
     rate_window: timedelta = timedelta(minutes=1)
+    # After a gap longer than this (Home Assistant or the charger's integration was down), a charge
+    # in between is averaged out over the whole gap and would look like standby. The rise then only
+    # counts as standby when its average stays below ``standby_w``.
+    long_gap: timedelta = timedelta(hours=1)
+    standby_w: float = 25.0
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,29 @@ class SessionEvent:
     type: str  # charge.started | charge.updated | charge.completed
     occurred_at: str
     payload: dict
+
+
+# The battery % of a snapshot this shortly before a charge's last kWh still counts as its end.
+SOC_END_SLACK = timedelta(minutes=5)
+
+
+def soc_end_from_history(history: list[list], end: datetime) -> tuple[float | None, bool]:
+    """Battery % at the end of a charge from the snapshots already taken, and whether to wait for one.
+
+    ``history`` is ``[[iso timestamp, battery %, odometer km], ...]`` in time order (the
+    odometer is missing or None for snapshots stored before 1.1.2). The first snapshot from shortly
+    before ``end`` on counts, unless the car drove between it and the snapshot before:
+    then the battery % at the end of the charge can no longer be known, and waiting for
+    a later snapshot would only give a wrong one.
+    """
+    odometer_before = None
+    for ts, battery, *rest in history:
+        odometer = rest[0] if rest else None
+        if datetime.fromisoformat(ts) >= end - SOC_END_SLACK:
+            moved = None not in (odometer, odometer_before) and odometer != odometer_before
+            return (None, False) if moved else (battery, False)
+        odometer_before = odometer if odometer is not None else odometer_before
+    return None, True
 
 
 class ChargeSessionMachine:
@@ -93,6 +121,8 @@ class ChargeSessionMachine:
 
         A rise slower than ``stop_w`` is the charger's standby use, not charging: it is
         left out of the session and does not keep the session open (docs/collector.md#home-charge-detection).
+        After a long gap between two readings the lower ``standby_w`` is the limit, so energy
+        charged while Home Assistant was down is not taken for standby.
         """
         if self.last_kwh is None or kwh < self.last_kwh:
             self._rebase(ts, kwh)  # first value, or the counter was reset
@@ -104,7 +134,10 @@ class ChargeSessionMachine:
         if elapsed is not None and elapsed < self.params.rate_window:
             return []  # judge the rise over a full window
         watts = delta / (elapsed.total_seconds() / 3600) * 1000 if elapsed else None
-        standby = watts is not None and watts < self.params.stop_w
+        limit = self.params.stop_w
+        if elapsed is not None and elapsed > self.params.long_gap:
+            limit = min(self.params.standby_w, limit)
+        standby = watts is not None and watts < limit
 
         if self.session is None:
             if delta < self.params.start_kwh:
@@ -128,13 +161,11 @@ class ChargeSessionMachine:
                 "samples": [],
                 "last_increase": ts.isoformat(),
                 "last_update_sent": ts.isoformat(),
+                "announced": False,
             }
-            self.state = CHARGING
-            self._add(ts, delta, price, price_source)
-            return [self._event("charge.started", ts)]
         self._add(ts, delta, price, price_source)
         self.state = CHARGING
-        return self._maybe_update(ts)
+        return self._announce(ts) or self._maybe_update(ts)
 
     def _rebase(self, ts: datetime, kwh: float) -> None:
         self.last_kwh, self.last_ts = kwh, ts
@@ -177,7 +208,24 @@ class ChargeSessionMachine:
                             "source": source})
         self.power_low_since = None
 
+    def _announced(self, session: dict) -> bool:
+        return session.get("announced", True)  # sessions saved before 1.1.2 were announced at once
+
+    def _announce(self, ts: datetime) -> list[SessionEvent]:
+        """``charge.started`` goes out once the session is large enough to be kept.
+
+        A session that stays below ``min_session_kwh`` is dropped without a trace, so the
+        add-on must not have heard of it: it would keep showing a running session forever.
+        """
+        if self._announced(self.session) or self.session["energy_kwh"] < self.params.min_session_kwh:
+            return []
+        self.session["announced"] = True
+        self.session["last_update_sent"] = ts.isoformat()
+        return [self._event("charge.started", ts)]
+
     def _maybe_update(self, ts: datetime) -> list[SessionEvent]:
+        if not self._announced(self.session):
+            return []
         last_sent = datetime.fromisoformat(self.session["last_update_sent"])
         if ts - last_sent < self.params.update_every:
             return []
@@ -188,8 +236,8 @@ class ChargeSessionMachine:
         session, self.session = self.session, None
         self.state = IDLE
         self.power_low_since = None
-        if session["energy_kwh"] < self.params.min_session_kwh:
-            return []
+        if session["energy_kwh"] < self.params.min_session_kwh and not self._announced(session):
+            return []  # a standby blip the add-on never heard of
         end = datetime.fromisoformat(session["last_increase"])
         return [self._event("charge.completed", end, session, final=True)]
 

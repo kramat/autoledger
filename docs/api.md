@@ -47,9 +47,9 @@ Event envelope:
 | `type` | Payload (main fields) |
 |---|---|
 | `trip.recorded` | `start_ts`, `start_ts_estimated`, `end_ts`, `start: {lat, lon, address, zone}`, `end: {…}`, `odometer_start`, `odometer_end`, `distance_km`, `distance_source` (`trip_meter`/`odometer`), `battery_start_pct`, `battery_end_pct`, `charged_kwh`, `fuel_start_l`, `fuel_end_l`, `kind`, `flags` |
-| `charge.started` / `charge.updated` / `charge.completed` | `session_id`, `charger_key`, `charger_name`, `start_ts`, `energy_kwh`, `cost`; `end_ts` and `price_samples: [{ts, kwh, price, source}]` only in `completed`; `soc_start`?, `soc_end`? |
+| `charge.started` / `charge.updated` / `charge.completed` | `session_id`, `charger_key`, `charger_name`, `start_ts`, `energy_kwh`, `cost`; `end_ts` and `price_samples: [{ts, kwh, price, source}]` only in `completed`; `soc_start`?, `soc_end`?. `cost` and a sample's `price` can be negative (dynamic tariffs). |
 | `charge.soc_update` | `session_id`, `soc_start`?, `soc_end`?. Sent later, once the cloud car has reported its battery level. |
-| `external_charge.detected` | `window_start`, `window_end`, `place`, `battery_start_pct`, `battery_end_pct`, `energy_kwh_estimated`, `car_reported_charging`, `flags: [...]` |
+| `external_charge.detected` | `session_id`?, `window_start`, `window_end`, `place`, `battery_start_pct`, `battery_end_pct`, `energy_kwh_estimated`, `car_reported_charging`, `flags: [...]`. Events with the same `session_id` are one charge: a later one extends the recorded session (fields the user corrected stay). Without `session_id` every event is a new charge. |
 | `refuel.detected` | `ts`, `place`, `odometer_km`, `fuel_start_l`, `fuel_end_l`, `litres_estimated`, `suggested_price_per_l`, `price_source` |
 | `idle.recorded` | `start_ts`, `end_ts`, `zone`, `battery_start_pct`?, `battery_end_pct`?, `fuel_start_l`?, `fuel_end_l`? |
 | `service.status` | `days_to_service`, `distance_to_service` (km), `odometer_km`. The car's own service countdown; the latest is kept per vehicle. |

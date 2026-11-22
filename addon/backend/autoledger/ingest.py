@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .charging import update_cost
 from .db import utcnow
-from .models import ChargeSession, IdleRecord, IngestEvent, OdometerReading, Refuel, Trip, Vehicle
+from .models import ChargeSession, IdleRecord, IngestEvent, OdometerReading, Refuel, ReviewItem, Trip, Vehicle
 from .review import add_item
 from .schedules import save_car_service
 from .schemas import (
@@ -129,9 +129,13 @@ def _soc_update(db: Session, event: IngestEventIn, _settings: SettingsModel) -> 
 def _external_charge(db: Session, event: IngestEventIn, settings: SettingsModel) -> str:
     data = _payload(ExternalChargePayload, event)
     vehicle = _vehicle(db, event)
+    key = f"ext-{data.session_id or event.uuid}"
+    existing = db.scalars(select(ChargeSession).where(ChargeSession.session_key == key)).first()
+    if existing is not None:
+        return _continue_external_charge(db, existing, data)
     session = ChargeSession(
         vehicle_id=vehicle.id,
-        session_key=f"ext-{event.uuid}",
+        session_key=key,
         kind="public",
         source="collector",
         status="needs_review",
@@ -167,6 +171,29 @@ def _external_charge(db: Session, event: IngestEventIn, settings: SettingsModel)
             "flags": data.flags,
         },
     )
+    return session.id
+
+
+def _continue_external_charge(db: Session, session: ChargeSession, data: ExternalChargePayload) -> str:
+    """A later report of a public charge that is already recorded: it charged on, so extend it.
+
+    Values the user corrected (from the receipt) are locked and stay. A session the user
+    deleted ("not a charge") stays deleted.
+    """
+    if session.deleted_at is not None or (session.end_ts is not None and data.window_end <= session.end_ts):
+        return session.id
+    _set(session, "start_ts", min(session.start_ts, data.window_start))
+    _set(session, "end_ts", data.window_end)
+    _set(session, "soc_end", data.battery_end_pct)
+    _set(session, "energy_kwh", round(data.energy_kwh_estimated, 3))
+    update_cost(db, session)
+    session.version += 1
+    for item in db.scalars(
+        select(ReviewItem).where(ReviewItem.record_id == session.id, ReviewItem.resolved_at.is_(None))
+    ):
+        item.details = {**(item.details or {}), "energy_kwh": session.energy_kwh,
+                        "battery": [session.soc_start, session.soc_end]}
+    db.flush()
     return session.id
 
 

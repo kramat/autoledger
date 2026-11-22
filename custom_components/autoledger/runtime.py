@@ -76,10 +76,12 @@ from .const import (
     VERSION,
 )
 from .engine.boost import HINT_DELAYS, boost_allowed, presence_hint
-from .engine.charging import ChargerParams, ChargeSessionMachine, SessionEvent
+from .engine.charging import ChargerParams, ChargeSessionMachine, SessionEvent, soc_end_from_history
 from .engine.detect import VehicleParams, detect
 from .engine.maintenance import maintenance_notifications
-from .engine.snapshot import Snapshot, parse_flag, parse_float, parse_text, sanitize
+from .engine.snapshot import (
+    Snapshot, confirm_odometer, odometer_plausible, parse_flag, parse_float, parse_text, sanitize,
+)
 from .outbox import Outbox
 
 _LOGGER = logging.getLogger(__name__)
@@ -195,7 +197,7 @@ class Runtime:
             elif event["type"] == "refuel.detected":
                 self.hass.bus.async_fire(EVENT_REFUEL_DETECTED, {**base, "litres": payload["litres_estimated"]})
                 self.hass.bus.async_fire(EVENT_REVIEW_NEEDED, {**base, "reason": "refuel_price"})
-            elif event["type"] == "external_charge.detected":
+            elif event["type"] == "external_charge.detected" and not payload.get("continued"):
                 self.hass.bus.async_fire(
                     EVENT_REVIEW_NEEDED,
                     {**base, "reason": "public_charge_price", "energy_kwh": payload["energy_kwh_estimated"]},
@@ -260,6 +262,7 @@ class VehicleTracker:
         self.state: dict = runtime.data["vehicles"].setdefault(
             self.subentry_id, {"last": None, "history": [], "pending_soc": []}
         )
+        _split_history(self.state)
         # The add-on's latest vehicle values (stored by apply_vehicle) win over the copy
         # made when the subentry was created, so a restart without the add-on keeps them.
         vehicle = self.state.get("vehicle") or data.get(CONF_VEHICLE, {})
@@ -473,7 +476,9 @@ class VehicleTracker:
     def _take_snapshot(self, _now=None) -> None:
         self._pending = None
         previous = self.last
-        snapshot, notes = sanitize(self.build(previous), previous, self.params.tank_l)
+        raw = self.build(previous)
+        rebase = self._odometer_confirmed(raw, previous)
+        snapshot, notes = sanitize(raw, previous, self.params.tank_l, accept_odometer=rebase)
         for note in notes:
             self.runtime.log(f"{self.name}: {note}")
         self._send_service_status(snapshot)
@@ -484,8 +489,19 @@ class VehicleTracker:
             return
         if snapshot.same_values(previous):
             return
+        if rebase:
+            # The stored odometer was wrong, not driven: a new baseline, and no trip for the difference.
+            self.runtime.log(
+                f"{self.name}: odometer {snapshot.odometer_km} km kept coming back, taken as the new baseline "
+                f"(was {previous.odometer_km} km)"
+            )
+            self.runtime.emit(
+                "odometer.reading", self.params.vehicle_id, snapshot.ts.isoformat(),
+                {"ts": snapshot.ts.isoformat(), "odometer_km": snapshot.odometer_km},
+            )
+            previous = replace(previous, odometer_km=snapshot.odometer_km, trip_meter_km=snapshot.trip_meter_km)
 
-        for found in detect(previous, snapshot, self.params):
+        for found in detect(previous, snapshot, self.params, self.state.setdefault("detect", {})):
             self.runtime.log(f"{self.name}: {found.type} ({found.reason})")
             payload = found.payload
             if found.type == "refuel.detected":
@@ -493,6 +509,20 @@ class VehicleTracker:
             self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, payload)
         self._commit(snapshot)
         self._send_pending_soc(snapshot)
+
+    def _odometer_confirmed(self, raw: Snapshot, previous: Snapshot | None) -> bool:
+        """Track odometer values that sanitize refuses; True once they have proven to be right."""
+        km = raw.odometer_km
+        if previous is None or km is None or previous.odometer_km is None:
+            return False
+        if km >= previous.odometer_km and odometer_plausible(previous, km, raw.ts):
+            if self.state.pop("odometer_suspects", None):
+                self.runtime.save_soon()
+            return False
+        suspects, confirmed = confirm_odometer(self.state.get("odometer_suspects") or [], raw.ts, km)
+        self.state["odometer_suspects"] = [] if confirmed else suspects
+        self.runtime.save_soon()
+        return confirmed
 
     def _fuel_price(self) -> dict:
         """The mapped fuel price entity's €/L, as the suggested price of a detected refuel."""
@@ -549,6 +579,7 @@ class VehicleTracker:
                    if nxt is None or (nxt - t).total_seconds() > SNAPSHOT_DEBOUNCE]
 
         previous: Snapshot | None = None
+        memory: dict = {}  # the detector memory of the replay, apart from live tracking's
         snapshots = events = 0
         try:
             for moment in moments:
@@ -559,7 +590,7 @@ class VehicleTracker:
                     continue
                 snapshots += 1
                 if previous is not None:
-                    for found in detect(previous, snapshot, self.params):
+                    for found in detect(previous, snapshot, self.params, memory):
                         key = f"{self.params.vehicle_id}|{found.type}|{found.occurred_at}"
                         self.runtime.emit(found.type, self.params.vehicle_id, found.occurred_at, found.payload,
                                           uuid=str(uuid5(BACKFILL_NAMESPACE, key)))
@@ -577,19 +608,40 @@ class VehicleTracker:
             history = self.state["history"]
             history.append([snapshot.ts.isoformat(), snapshot.battery_pct])
             del history[:-HISTORY]
+            # The odometer tells whether the car moved between two readings. It is kept apart, so
+            # the history keeps the shape older Collector versions read (a downgrade keeps working).
+            odometers = self.state.setdefault("history_odometer", {})
+            odometers[snapshot.ts.isoformat()] = snapshot.odometer_km
+            for ts in set(odometers) - {entry[0] for entry in history}:
+                del odometers[ts]
         self.runtime.save_soon()
 
     def soc_at(self, when: str) -> float | None:
         """Battery % of the last snapshot at or before ``when``."""
         moment = dt_util.parse_datetime(when)
         value = None
-        for ts, battery in self.state["history"]:
+        for ts, battery, *_ in self.state["history"]:
             if dt_util.parse_datetime(ts) <= moment:
                 value = battery
         return value
 
+    def soc_end_known(self, end_ts: str) -> tuple[float | None, bool]:
+        """Battery % at the end of a charge from the snapshots already taken, and whether to wait for one.
+
+        The session is reported a quarter of an hour after its last kWh, so the car has
+        often sent its final battery % by then. The first snapshot from shortly before the
+        end counts, unless the car has driven since the snapshot before it: then the
+        battery % at the end of the charge can no longer be known.
+        """
+        odometers = self.state.get("history_odometer") or {}
+        history = [[ts, battery, odometers.get(ts)] for ts, battery, *_ in self.state["history"]]
+        return soc_end_from_history(history, dt_util.parse_datetime(end_ts))
+
     def await_soc_end(self, session_id: str, end_ts: str) -> None:
-        self.state["pending_soc"].append({"session_id": session_id, "end_ts": end_ts})
+        last = self.last
+        self.state["pending_soc"].append(
+            {"session_id": session_id, "end_ts": end_ts, "odometer_km": last.odometer_km if last else None}
+        )
         self.runtime.save_soon()
 
     def _send_pending_soc(self, snapshot: Snapshot) -> None:
@@ -600,7 +652,11 @@ class VehicleTracker:
         for pending in self.state["pending_soc"]:
             end = dt_util.parse_datetime(pending["end_ts"])
             if snapshot.ts >= end:
-                if snapshot.ts - end <= timedelta(hours=12):
+                parked_at = pending.get("odometer_km")
+                if None not in (parked_at, snapshot.odometer_km) and snapshot.odometer_km != parked_at:
+                    # The car drove before it reported: this battery % is not the charge's end.
+                    self.runtime.log(f"{self.name}: no battery % for the end of {pending['session_id']}: driven since")
+                elif snapshot.ts - end <= timedelta(hours=12):
                     self.runtime.emit(
                         "charge.soc_update",
                         self.params.vehicle_id,
@@ -610,6 +666,19 @@ class VehicleTracker:
             else:
                 remaining.append(pending)
         self.state["pending_soc"] = remaining
+
+
+def _split_history(state: dict) -> None:
+    """Move odometer values out of the battery history (a 1.1.2 test build stored them in it).
+
+    Collector 1.1.1 and older read each history entry as ``[timestamp, battery %]``; a third
+    value would stop them from reporting home charges after a downgrade.
+    """
+    odometers = state.setdefault("history_odometer", {})
+    for entry in state.get("history") or []:
+        if len(entry) > 2:
+            odometers[entry[0]] = entry[2]
+            del entry[2:]
 
 
 def _state_at(states: list[State], moment: datetime) -> State | None:
@@ -709,7 +778,11 @@ class ChargerTracker:
                 soc_start = vehicle.soc_at(payload["start_ts"])
                 if soc_start is not None:
                     payload["soc_start"] = soc_start
-                vehicle.await_soc_end(payload["session_id"], payload["end_ts"])
+                soc_end, wait = vehicle.soc_end_known(payload["end_ts"])
+                if soc_end is not None:
+                    payload["soc_end"] = soc_end
+                elif wait:
+                    vehicle.await_soc_end(payload["session_id"], payload["end_ts"])
             self.runtime.log(f"{self.name}: {event.type} {payload['energy_kwh']:.2f} kWh, {payload['cost']:.2f}")
             self.runtime.emit(event.type, vehicle.params.vehicle_id if vehicle else None, event.occurred_at, payload)
         self.runtime.data["chargers"][self.subentry_id] = self.machine.to_dict()

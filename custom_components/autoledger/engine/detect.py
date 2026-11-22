@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from math import asin, cos, radians, sin, sqrt
+from uuid import UUID, uuid5
 
 from .snapshot import Snapshot
 
@@ -53,7 +55,19 @@ def _delta(new: float | None, old: float | None) -> float | None:
     return None if new is None or old is None else new - old
 
 
-def detect(prev: Snapshot, new: Snapshot, params: VehicleParams) -> list[Detection]:
+# Public charge sessions get ids derived from vehicle and start, so live tracking and backfill agree.
+PUBLIC_CHARGE_NAMESPACE = UUID("3d0f6b2c-8a41-5c7e-9b12-7e4a0c9d1f58")
+# A public charge with no battery rise for this long is over, even when the car has not moved.
+PUBLIC_CHARGE_QUIET = timedelta(hours=6)
+
+
+def detect(prev: Snapshot, new: Snapshot, params: VehicleParams, state: dict | None = None) -> list[Detection]:
+    """Everything that happened between two snapshots.
+
+    ``state`` is the vehicle's detector memory, kept between calls: a public charge seen over
+    several reports (the car's data refreshed while it charges) stays one session in it.
+    """
+    state = {} if state is None else state
     found: list[Detection] = []
     distance = _delta(new.odometer_km, prev.odometer_km) or 0.0
     driven = distance >= params.min_distance_km
@@ -91,8 +105,15 @@ def detect(prev: Snapshot, new: Snapshot, params: VehicleParams) -> list[Detecti
     home_kwh = home_kwh if home_kwh is not None and home_kwh > 0 else 0.0
     factor = params.wall_kwh_per_pct
     external_kwh = 0.0
+    if driven or home_kwh >= params.home_kwh_tolerance or not params.has_battery:
+        state.pop("public_charge", None)  # the car left, or charges at home: a public charge is over
+    elif battery_delta is not None and factor:
+        charge = _follow_public_charge(state, prev, new, params, factor, battery_delta)
+        if charge is not None:
+            found.append(charge)
     if (
-        params.has_battery
+        driven
+        and params.has_battery
         and battery_delta is not None
         and battery_delta >= params.external_charge_min_pct
         and home_kwh < params.home_kwh_tolerance
@@ -140,10 +161,84 @@ def detect(prev: Snapshot, new: Snapshot, params: VehicleParams) -> list[Detecti
 ROUND_TRIP_M = 150
 
 
-def _metres(a: Snapshot, b: Snapshot) -> float | None:
-    if None in (a.lat, a.lon, b.lat, b.lon):
+def _follow_public_charge(
+    state: dict, prev: Snapshot, new: Snapshot, params: VehicleParams, factor: float, battery_delta: float
+) -> Detection | None:
+    """A battery rise while parked away from the home charger: one session per charge, however often the car reports.
+
+    The rises of consecutive reports add up. The session is reported once its rise reaches
+    ``external_charge_min_pct``, and again with every further rise under the same session id,
+    so the add-on updates it instead of adding another. It ends when the battery goes down,
+    the car moves or charges at home, or after PUBLIC_CHARGE_QUIET without a rise.
+    """
+    charge = state.get("public_charge")
+    if charge is not None and (
+        battery_delta < 0
+        or not _same_place(charge["place"], new.place)
+        or new.ts - datetime.fromisoformat(charge["end_ts"]) > PUBLIC_CHARGE_QUIET
+    ):
+        state.pop("public_charge")
+        charge = None
+    if battery_delta <= 0 or prev.battery_pct is None:
         return None
-    lat1, lon1, lat2, lon2 = map(radians, (a.lat, a.lon, b.lat, b.lon))
+    if charge is None:
+        start = prev.ts.isoformat()
+        charge = {
+            "session_id": f"pub-{uuid5(PUBLIC_CHARGE_NAMESPACE, f'{params.vehicle_id}|{start}')}",
+            "start_ts": start,
+            "start_pct": prev.battery_pct,
+            "place": new.place,
+            "car_charging": None,
+            "sent": False,
+        }
+    charge["end_ts"] = new.ts.isoformat()
+    charge["end_pct"] = new.battery_pct
+    if prev.charging or new.charging:
+        charge["car_charging"] = True
+    elif charge["car_charging"] is None and (prev.charging is False or new.charging is False):
+        charge["car_charging"] = False
+    state["public_charge"] = charge
+
+    rise = charge["end_pct"] - charge["start_pct"]
+    if not charge["sent"] and rise < params.external_charge_min_pct:
+        return None  # not enough yet: battery noise, or the start of a charge
+    continued, charge["sent"] = charge["sent"], True
+    return Detection(
+        "external_charge.detected",
+        new.ts.isoformat(),
+        {
+            "session_id": charge["session_id"],
+            "continued": continued,
+            "window_start": charge["start_ts"],
+            "window_end": charge["end_ts"],
+            "place": charge["place"],
+            "battery_start_pct": charge["start_pct"],
+            "battery_end_pct": charge["end_pct"],
+            "energy_kwh_estimated": round(rise * factor, 2),
+            "car_reported_charging": charge["car_charging"],
+            "flags": [],
+        },
+        f"battery {charge['start_pct']} → {charge['end_pct']} % since {charge['start_ts']}"
+        + (" (same charge)" if continued else ""),
+    )
+
+
+def _same_place(a: dict, b: dict) -> bool:
+    """Two places are the same when they share a zone or are within ROUND_TRIP_M; unknown counts as the same."""
+    if a.get("zone") is not None and a.get("zone") == b.get("zone"):
+        return True
+    metres = _distance(a.get("lat"), a.get("lon"), b.get("lat"), b.get("lon"))
+    return metres is None or metres <= ROUND_TRIP_M
+
+
+def _metres(a: Snapshot, b: Snapshot) -> float | None:
+    return _distance(a.lat, a.lon, b.lat, b.lon)
+
+
+def _distance(lat_a: float | None, lon_a: float | None, lat_b: float | None, lon_b: float | None) -> float | None:
+    if None in (lat_a, lon_a, lat_b, lon_b):
+        return None
+    lat1, lon1, lat2, lon2 = map(radians, (lat_a, lon_a, lat_b, lon_b))
     h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
     return 2 * 6_371_000 * asin(sqrt(h))
 

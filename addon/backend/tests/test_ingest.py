@@ -235,3 +235,82 @@ def test_manual_public_charge_validation(client, lynk):
     assert free["cost"] == 0
     no_vehicle = client.post(f"{API}/charges", json={**base, "vehicle_id": None, "price_per_kwh": 0.5})
     assert no_vehicle.status_code == 422
+
+
+def test_negative_electricity_price_is_accepted(client, lynk):
+    """A dynamic tariff can go below zero: the session must be stored, not rejected."""
+    vid = lynk["id"]
+    result = send(
+        client,
+        event("charge.started", charge_payload(energy_kwh=0.3, cost=-0.006), vid),
+        event("charge.completed", charge_payload(
+            energy_kwh=8.0, cost=-0.2, end_ts="2026-11-02T01:00:00Z",
+            price_samples=[
+                {"ts": "2026-11-01T22:00:00Z", "kwh": 4, "price": 0.05, "source": "entity"},
+                {"ts": "2026-11-02T00:00:00Z", "kwh": 4, "price": -0.10, "source": "entity"},
+            ],
+        ), vid),
+    )
+    assert result["rejected"] == [] and len(result["accepted"]) == 2
+    [session] = client.get(f"{API}/charges").json()["items"]
+    assert session["is_open"] is False
+    assert session["energy_kwh"] == 8.0
+    assert session["cost"] == pytest.approx(-0.2)
+    assert session["avg_price"] == pytest.approx(-0.025)
+    assert open_reviews(client) == []
+    assert client.get(f"{API}/summary").status_code == 200
+
+
+def public_charge_report(vid, start, end, battery, kwh, session_id="pub-1"):
+    payload = {
+        "session_id": session_id, "window_start": start, "window_end": end,
+        "place": {"lat": 52.08, "lon": 4.88, "address": "Hoefslag 29, Woerden"},
+        "battery_start_pct": 1, "battery_end_pct": battery, "energy_kwh_estimated": kwh,
+        "car_reported_charging": True, "flags": [],
+    }
+    return event("external_charge.detected", payload, vid, occurred_at=end)
+
+
+def test_reports_of_one_public_charge_update_one_session(client, lynk):
+    """The car's data was refreshed during the charge: one session, extended by every report."""
+    vid = lynk["id"]
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T11:16:00Z", 25, 3.96))
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T12:19:00Z", 40, 6.44))
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T14:30:00Z", 94, 15.35))
+    [session] = client.get(f"{API}/charges").json()["items"]
+    assert session["start_ts"].startswith("2026-11-21T09:40")
+    assert session["end_ts"].startswith("2026-11-21T14:30")
+    assert (session["soc_start"], session["soc_end"]) == (1, 94)
+    assert session["energy_kwh"] == pytest.approx(15.35)
+    assert session["cost"] == pytest.approx(15.35 * 0.59, abs=0.01)
+    [item] = open_reviews(client)
+    assert item["details"]["energy_kwh"] == pytest.approx(15.35)
+
+
+def test_receipt_values_survive_later_reports(client, lynk):
+    vid = lynk["id"]
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T11:16:00Z", 25, 3.96))
+    [session] = client.get(f"{API}/charges").json()["items"]
+    patch = client.patch(f"{API}/charges/{session['id']}", json={"energy_kwh": 16.2, "price_per_kwh": 0.49})
+    assert patch.status_code == 200, patch.text
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T14:30:00Z", 94, 15.35))
+    [session] = client.get(f"{API}/charges").json()["items"]
+    assert session["energy_kwh"] == 16.2 and session["price_per_kwh"] == 0.49
+    assert session["soc_end"] == 94
+
+
+def test_a_deleted_public_charge_stays_deleted(client, lynk):
+    vid = lynk["id"]
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T11:16:00Z", 25, 3.96))
+    [session] = client.get(f"{API}/charges").json()["items"]
+    assert client.delete(f"{API}/charges/{session['id']}").status_code == 204
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T14:30:00Z", 94, 15.35))
+    assert client.get(f"{API}/charges").json()["items"] == []
+
+
+def test_reports_without_a_session_id_stay_separate(client, lynk):
+    """Collector 1.1.1 sends no session id: every report is its own charge, as before."""
+    vid = lynk["id"]
+    send(client, public_charge_report(vid, "2026-11-21T09:40:00Z", "2026-11-21T11:16:00Z", 25, 3.96, None))
+    send(client, public_charge_report(vid, "2026-11-21T11:16:00Z", "2026-11-21T12:19:00Z", 40, 2.48, None))
+    assert len(client.get(f"{API}/charges").json()["items"]) == 2

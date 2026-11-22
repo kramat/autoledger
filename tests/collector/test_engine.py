@@ -4,10 +4,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from custom_components.autoledger.engine.charging import ChargerParams, ChargeSessionMachine
+from custom_components.autoledger.engine.charging import (
+    ChargerParams, ChargeSessionMachine, soc_end_from_history,
+)
 from custom_components.autoledger.engine.detect import VehicleParams, detect
 from custom_components.autoledger.engine.maintenance import maintenance_notifications
-from custom_components.autoledger.engine.snapshot import Snapshot, parse_flag, parse_float, sanitize
+from custom_components.autoledger.runtime import _split_history
+from custom_components.autoledger.engine.snapshot import (
+    Snapshot, confirm_odometer, parse_flag, parse_float, sanitize,
+)
 
 LYNK = VehicleParams(vehicle_id="lynk", type="PHEV", tank_l=51, battery_usable_kwh=14.1, kwh_per_pct=0.165)
 
@@ -374,3 +379,226 @@ def test_state_saved_before_standby_handling_still_completes():
         events += machine.on_energy(moment, kwh, 0.19, "entity") + machine.tick(moment)
     assert [e.type for e in events].count("charge.completed") == 1 and "charge.started" not in [e.type for e in events]
     assert not machine.active
+
+
+# --- Odometer values that cannot be right ----------------------------------
+
+
+def test_odometer_jump_is_refused_and_tracking_goes_on():
+    """One wrong value from the cloud (634 390 for 63 439) must not become the baseline."""
+    prev = snap("2026-11-02T08:00:00")
+    glitch, notes = sanitize(snap("2026-11-02T09:00:00", odometer_km=634390), prev, tank_l=51)
+    assert glitch.odometer_km == 63439 and "jumped" in notes[0]
+    assert detect(prev, glitch, LYNK) == []
+
+    real, notes = sanitize(snap("2026-11-02T10:00:00", odometer_km=63470, battery_pct=60.0), glitch, tank_l=51)
+    assert real.odometer_km == 63470 and notes == []
+    assert "trip.recorded" in types(detect(glitch, real, LYNK))
+
+
+def test_long_drive_while_home_assistant_was_down_is_believed():
+    prev = snap("2026-11-02T08:00:00")
+    # 1200 km reported "two minutes later": reports arrive late, so this much is always possible.
+    late, _ = sanitize(snap("2026-11-02T08:02:00", odometer_km=64639), prev, tank_l=51)
+    assert late.odometer_km == 64639
+    # 4000 km needs the time to drive it.
+    assert sanitize(snap("2026-11-02T12:00:00", odometer_km=67439), prev, tank_l=51)[0].odometer_km == 63439
+    assert sanitize(snap("2026-11-04T08:00:00", odometer_km=67439), prev, tank_l=51)[0].odometer_km == 67439
+
+
+def test_refused_odometer_that_keeps_coming_back_becomes_the_baseline():
+    """A baseline that was wrong (stored before 1.1.2, or a replaced sensor) corrects itself."""
+    suspects, confirmed = confirm_odometer([], ts("2026-11-02T09:00:00"), 63439)
+    assert not confirmed
+    suspects, confirmed = confirm_odometer(suspects, ts("2026-11-02T09:10:00"), 63439)
+    assert not confirmed
+    suspects, confirmed = confirm_odometer(suspects, ts("2026-11-02T09:20:00"), 63445)
+    assert not confirmed  # three readings, but within half an hour: could be one bad report
+    suspects, confirmed = confirm_odometer(suspects, ts("2026-11-02T12:00:00"), 63470)
+    assert confirmed
+
+    wrong = snap("2026-11-02T08:00:00", odometer_km=634390)
+    new = snap("2026-11-02T12:00:00", odometer_km=63470)
+    assert sanitize(new, wrong, tank_l=51)[0].odometer_km == 634390
+    assert sanitize(new, wrong, tank_l=51, accept_odometer=True)[0].odometer_km == 63470
+
+
+def test_unrelated_refused_values_and_zero_are_never_confirmed():
+    suspects, _ = confirm_odometer([], ts("2026-11-02T09:00:00"), 6343)
+    suspects, confirmed = confirm_odometer(suspects, ts("2026-11-02T10:00:00"), 120000)
+    assert suspects == [[ts("2026-11-02T10:00:00").isoformat(), 120000]] and not confirmed
+    suspects = []
+    for hour in (9, 10, 11, 12):  # a cloud that answers 0 on an error
+        suspects, confirmed = confirm_odometer(suspects, ts(f"2026-11-02T{hour:02d}:00:00"), 0)
+        assert suspects == [] and not confirmed
+
+
+# --- Charging: long gaps, tiny sessions, battery % at the end ---------------
+
+
+def test_charge_while_home_assistant_was_down_for_days_is_recorded():
+    """5 kWh over three days averages 69 W: below the charging limit, but it is not standby."""
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-01T12:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    back = t + timedelta(days=3)
+    events = machine.on_energy(back, 1005.0, 0.19, "fallback")
+    assert [e.type for e in events] == ["charge.started"]
+    for minute in range(1, 20):
+        events += machine.tick(back + timedelta(minutes=minute))
+    assert events[-1].type == "charge.completed" and events[-1].payload["energy_kwh"] == 5.0
+
+
+def test_restart_hours_later_keeps_the_rest_of_the_session():
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-01T22:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    machine.on_energy(t + timedelta(minutes=2), 1000.2, 0.19, "entity")
+    machine.on_energy(t + timedelta(minutes=4), 1000.4, 0.19, "entity")
+    machine = ChargeSessionMachine(SHELLY, machine.to_dict())  # down for ten hours, 0.9 kWh more (90 W on average)
+    machine.on_energy(t + timedelta(hours=10), 1001.3, 0.19, "entity")
+    assert machine.energy_kwh == pytest.approx(1.3)
+
+
+def test_standby_over_a_long_gap_is_still_standby():
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-01T12:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    assert machine.on_energy(t + timedelta(days=3), 1000.22, 0.19, "entity") == []  # 3 W for three days
+    assert not machine.active and machine.last_kwh == 1000.22
+
+
+def test_a_session_is_announced_once_it_is_large_enough_to_keep():
+    """No charge.started for a blip that is dropped: the add-on would show it as running forever."""
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-01T12:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    assert machine.on_energy(t + timedelta(minutes=1), 1000.1, 0.19, "entity") == []
+    assert machine.active  # the entities of the charger show it at once
+    events = []
+    for minute in range(2, 40):
+        events += machine.tick(t + timedelta(minutes=minute))
+    assert events == [] and not machine.active
+
+    start = t + timedelta(hours=1)
+    assert machine.on_energy(start, 1000.2, 0.19, "entity") == []
+    events = machine.on_energy(start + timedelta(minutes=2), 1000.32, 0.19, "entity")
+    assert [e.type for e in events] == ["charge.started"]
+    assert events[0].payload["start_ts"] == start.isoformat()
+    assert events[0].payload["energy_kwh"] == pytest.approx(0.22)
+
+
+def test_tiny_session_announced_by_an_older_version_is_closed():
+    machine = ChargeSessionMachine(SHELLY)
+    t = ts("2026-11-01T12:00:00")
+    machine.on_energy(t, 1000.0, 0.19, "entity")
+    machine.on_energy(t + timedelta(minutes=1), 1000.1, 0.19, "entity")
+    old = machine.to_dict()
+    del old["session"]["announced"]  # 1.1.1 sent charge.started at the first rise
+    machine = ChargeSessionMachine(SHELLY, old)
+    assert [e.type for e in machine.tick(t + timedelta(minutes=30))] == ["charge.completed"]
+
+
+def test_battery_at_the_end_of_a_charge_comes_from_a_snapshot_that_is_already_there():
+    end = ts("2026-11-02T03:00:00")
+    history = [
+        ["2026-11-01T18:00:00+00:00", 20.0, 63439],
+        ["2026-11-02T03:05:00+00:00", 100.0, 63439],  # the report of the car, before the session is closed
+    ]
+    assert soc_end_from_history(history, end) == (100.0, False)
+    # Reported just before the last kWh: close enough.
+    assert soc_end_from_history([history[0], ["2026-11-02T02:57:00+00:00", 99.5, 63439]], end) == (99.5, False)
+    # Nothing since the end yet: wait for the next snapshot.
+    assert soc_end_from_history(history[:1], end) == (None, True)
+    # The car left right away and only reported after the drive: unknown, and waiting will not help.
+    assert soc_end_from_history([history[0], ["2026-11-02T03:12:00+00:00", 85.0, 63470]], end) == (None, False)
+    # History stored before 1.1.2 has no odometer.
+    assert soc_end_from_history([["2026-11-02T03:05:00+00:00", 100.0]], end) == (100.0, False)
+
+
+# --- One public charge, however often the car reports -----------------------
+
+WOERDEN = {"lat": 52.0833, "lon": 4.8833, "address": "Hoefslag 29, Woerden"}
+
+
+def public_charge(reports, state=None):
+    """Feed (time, battery %) reports of a car parked away from home; returns all detections."""
+    state = {} if state is None else state
+    found, prev = [], None
+    for at, battery in reports:
+        new = snap(at, battery_pct=battery, **WOERDEN)
+        if prev is not None:
+            found += detect(prev, new, LYNK, state)
+        prev = new
+    return found, state
+
+
+def test_refreshing_during_a_public_charge_gives_one_session():
+    """21 Nov 2026: one charge at the Hoefslag, seen in five reports because the data was refreshed."""
+    found, state = public_charge([
+        ("2026-11-21T10:40:00", 1.0), ("2026-11-21T12:16:00", 25.0), ("2026-11-21T13:19:00", 40.0),
+        ("2026-11-21T13:40:00", 41.0), ("2026-11-21T14:01:00", 52.0), ("2026-11-21T15:30:00", 94.0),
+    ])
+    charges = [d.payload for d in found if d.type == "external_charge.detected"]
+    assert len({c["session_id"] for c in charges}) == 1
+    assert [c["continued"] for c in charges] == [False, True, True, True, True]
+    last = charges[-1]
+    assert last["window_start"] == ts("2026-11-21T10:40:00").isoformat()
+    assert last["window_end"] == ts("2026-11-21T15:30:00").isoformat()
+    assert (last["battery_start_pct"], last["battery_end_pct"]) == (1.0, 94.0)
+    assert last["energy_kwh_estimated"] == pytest.approx(93 * 0.165, abs=0.01)
+    assert "idle.recorded" not in types(found) and "trip.recorded" not in types(found)
+
+
+def test_small_rises_of_frequent_reports_add_up():
+    """A report every few minutes shows 1-2 % at a time: each step is below the threshold, the charge is not."""
+    found, _ = public_charge([
+        ("2026-11-21T10:00:00", 40.0), ("2026-11-21T10:05:00", 42.0), ("2026-11-21T10:10:00", 44.0),
+    ])
+    [charge] = [d.payload for d in found if d.type == "external_charge.detected"]
+    assert (charge["battery_start_pct"], charge["battery_end_pct"]) == (40.0, 44.0)
+
+
+def test_battery_noise_while_parked_is_not_a_charge():
+    found, state = public_charge([
+        ("2026-11-21T10:00:00", 50.0), ("2026-11-21T10:30:00", 51.0), ("2026-11-21T11:00:00", 50.0),
+        ("2026-11-21T11:30:00", 52.0),
+    ])
+    assert "external_charge.detected" not in types(found)
+    assert state["public_charge"]["start_pct"] == 50.0  # a new rise starts from the dip
+
+
+def test_driving_away_ends_the_public_charge():
+    found, state = public_charge([("2026-11-21T10:00:00", 20.0), ("2026-11-21T11:00:00", 60.0)])
+    first = [d.payload for d in found if d.type == "external_charge.detected"][0]["session_id"]
+    parked = snap("2026-11-21T11:00:00", battery_pct=60.0, **WOERDEN)
+    home = snap("2026-11-21T12:00:00", odometer_km=63470, battery_pct=50.0)
+    assert "trip.recorded" in types(detect(parked, home, LYNK, state))
+    assert "public_charge" not in state
+    again, _ = public_charge([("2026-11-22T10:00:00", 50.0), ("2026-11-22T11:00:00", 70.0)], state)
+    assert [d.payload for d in again if d.type == "external_charge.detected"][0]["session_id"] != first
+
+
+def test_a_charge_after_hours_without_a_rise_is_a_new_session():
+    found, _ = public_charge([
+        ("2026-11-21T10:00:00", 20.0), ("2026-11-21T11:00:00", 60.0),
+        ("2026-11-21T20:00:00", 60.0), ("2026-11-21T21:00:00", 80.0),
+    ])
+    ids = [d.payload["session_id"] for d in found if d.type == "external_charge.detected"]
+    assert len(ids) == 2 and ids[0] != ids[1]
+
+
+def test_public_charge_session_id_is_the_same_live_and_in_backfill():
+    one, _ = public_charge([("2026-11-21T10:00:00", 20.0), ("2026-11-21T11:00:00", 60.0)])
+    two, _ = public_charge([("2026-11-21T10:00:00", 20.0), ("2026-11-21T11:00:00", 60.0)])
+    assert one[0].payload["session_id"] == two[0].payload["session_id"]
+
+
+def test_battery_history_keeps_the_shape_older_versions_read():
+    """A 1.1.2 test build stored the odometer in the history; Collector 1.1.1 cannot read that."""
+    state = {"history": [["2026-11-21T10:00:00+00:00", 40.0, 63439], ["2026-11-21T11:00:00+00:00", 60.0]]}
+    _split_history(state)
+    assert state["history"] == [["2026-11-21T10:00:00+00:00", 40.0], ["2026-11-21T11:00:00+00:00", 60.0]]
+    assert state["history_odometer"] == {"2026-11-21T10:00:00+00:00": 63439}
+    for _ts, _battery in state["history"]:  # what 1.1.1 does
+        pass

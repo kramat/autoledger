@@ -479,7 +479,7 @@ class IngestBatch(BaseModel):
 class PriceSample(BaseModel):
     ts: AwareDatetime
     kwh: float = Field(ge=0)
-    price: float = Field(ge=0)
+    price: float  # a dynamic tariff can be negative
     source: str = "entity"
 
 
@@ -490,7 +490,7 @@ class ChargePayload(BaseModel):
     start_ts: AwareDatetime
     end_ts: AwareDatetime | None = None
     energy_kwh: float = Field(ge=0)
-    cost: float | None = Field(None, ge=0)
+    cost: float | None = None  # negative when the tariff was negative
     price_samples: list[PriceSample] | None = None
     soc_start: float | None = Field(None, ge=0, le=100)
     soc_end: float | None = Field(None, ge=0, le=100)
@@ -503,6 +503,8 @@ class SocUpdatePayload(BaseModel):
 
 
 class ExternalChargePayload(BaseModel):
+    # The same public charge seen in several car reports carries one id (Collector 1.1.2 and later).
+    session_id: str | None = Field(None, min_length=1, max_length=60)
     window_start: AwareDatetime
     window_end: AwareDatetime
     place: Place = Place()

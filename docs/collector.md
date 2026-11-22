@@ -63,7 +63,8 @@ Snapshot
 ```
 
 - The car timestamp is valid when it is at most 5 min in the future and later than the previous snapshot's.
-- Values that are `unavailable`, `unknown` or non-numeric are taken from the previous snapshot. So are physically impossible values: an odometer going down, a battery outside 0–100 %, or fuel below 0 or above the tank size plus 10 %. Each replacement of an impossible value is logged in the diagnostics' decisions.
+- Values that are `unavailable`, `unknown` or non-numeric are taken from the previous snapshot. So are physically impossible values: an odometer going down, an odometer rising by more than the car can have driven (more than 1500 km *and* more than 200 km/h since the previous snapshot), a battery outside 0–100 %, or fuel below 0 or above the tank size plus 10 %. Each replacement of an impossible value is logged in the diagnostics' decisions.
+- A refused odometer value that keeps coming back is right after all (the stored value was wrong, or the sensor was replaced): after three such readings in a row, spread over at least half an hour, it becomes the new baseline. No trip is made for the difference. A value of 0 never counts.
 - The place follows the position. Only when the position is unknown are lat/lon, address and zone taken from the previous snapshot. A known position outside every zone has no zone, and an address that is missing is only kept while the position is the same.
 - A snapshot that differs from the previous one only in its time is dropped.
 - The first snapshot after setup is stored as the baseline. The last **committed** snapshot is persisted in the Store. Detectors always compare *new snapshot* against *last committed snapshot*. This delta-based design is why restarts and sparse data are handled correctly.
@@ -120,19 +121,21 @@ FINALISING ──(counter rises again)──► CHARGING           (same session
 - **Energy comes only from the cumulative kWh counter**, never from integrating power. A sensor dropping to `unavailable` does nothing. The next valid counter value covers the gap. A counter that goes down (reset, replacement) gives a new base. Rises below 0.05 kWh while idle add up until they reach it. The session ends at the counter's last rise.
 - **Pricing per increment.** Every time the counter rises by Δ kWh, `cost += Δ × price_now`, using the `price` entity's current state, or the fixed price when that is unavailable, or else the add-on's fallback electricity price. A night charge on a dynamic tariff is therefore priced correctly hour by hour. The session stores both `energy_kwh` and `cost`, plus the price samples with their source.
 - **Vehicle attribution.** The session goes to the charger's assigned vehicle. Without one, the session is still recorded and lands in the review inbox.
-- **Battery %.** `soc_start` is the battery % of the vehicle's last snapshot at or before the session's start. `soc_end` comes from the first snapshot after the end, up to 12 h later, because cloud cars report late. These values feed the [kWh-per-% learning](costs.md#kwh-per-percent).
+- **Battery %.** `soc_start` is the battery % of the vehicle's last snapshot at or before the session's start. `soc_end` is the battery % of the first snapshot from 5 minutes before the session's end on. The session is reported 15 minutes after its last kWh, so that snapshot is often there already; otherwise the next one is used, up to 12 h later, because cloud cars report late. A snapshot taken after the car has driven is never used: the session then has no `soc_end`. These values feed the [kWh-per-% learning](costs.md#kwh-per-percent).
 - **Persistence.** The open session, its last counter value and its running cost are written to the Store on every change. Energy delivered while HA was down is in the counter and is counted at the next start. `charge.updated` events go out every 15 min.
-- **Standby use.** A counter rise is judged by its average power over at least a minute. A rise slower than `stop_w` (default 100 W) is the charger's own standby use, for example the ~3 W a Shelly EV charger draws after the car is full: it is not added to a session and does not keep one open, and without a session it never adds up to a new one.
-- Sessions below `min_session_kwh` (default 0.2) are discarded, since those are standby blips.
+- **Standby use.** A counter rise is judged by its average power over at least a minute. A rise slower than `stop_w` (default 100 W) is the charger's own standby use, for example the ~3 W a Shelly EV charger draws after the car is full: it is not added to a session and does not keep one open, and without a session it never adds up to a new one. After a gap of more than an hour between two counter values (Home Assistant or the charger's integration was down), a charge in between is averaged out over the whole gap, so the rise then only counts as standby below 25 W. A charge of less than that on average over the gap cannot be told from standby and is not recorded.
+- Sessions below `min_session_kwh` (default 0.2) are discarded, since those are standby blips. `charge.started` is sent once a session reaches that size, so the add-on never hears of a discarded one. The charger's own entities show the session from its first kWh.
 
 ## External (public) charge detection
 
-This applies to PHEV and BEV. Between two snapshots, an external charge is assumed when:
+This applies to PHEV and BEV. While the car is parked, an external charge is assumed when:
 
-- `Δbattery_pct ≥ +3 %` (`external_charge_min_pct`), **and**
-- the assigned home charger delivered `< 0.2 kWh` in that window.
+- the battery % rises by at least 3 % (`external_charge_min_pct`) from where it started rising, **and**
+- the assigned home charger delivered `< 0.2 kWh` in those windows.
 
-The event carries `energy_kwh_estimated = Δbattery_pct × kwh_per_pct`, the place, the battery % at both ends and the time window. The add-on records it as a public charge priced at its *public charging price* setting, and puts it in the review inbox, where you enter the receipt's kWh and the price per kWh or the total amount.
+**One charge, however often the car reports.** When the car's data is refreshed during a charge (by you, by [Snapshot boost](#snapshot-boost), or by the car's integration), every report shows part of the rise. Those parts add up to one session: the rises of consecutive reports count together, so small steps of 1–2 % between frequent reports are not lost, and the session is sent with the same `session_id` every time it grows. The add-on then extends that session instead of adding another. A session ends when the battery goes down, the car moves (more than 150 m and not in the same zone) or charges at home, or after 6 hours without a rise. Its id is derived from the vehicle and the start, so a backfill of the same period gives the same session.
+
+The event carries `energy_kwh_estimated = Δbattery_pct × kwh_per_pct` over the whole session so far, the place, the battery % at both ends and the time window. A charge seen in a segment that also includes driving is reported on its own, as below. The add-on records it as a public charge priced at its *public charging price* setting, and puts it in the review inbox, where you enter the receipt's kWh and the price per kWh or the total amount.
 
 The event also records whether the car itself reported charging (`charging_state`). When the segment includes driving and the car did not report charging (or `charging_state` is not mapped), the event is flagged `possible_engine_charge`: a PHEV can charge its battery from the engine. Its kWh are then not added to the trip, and the review item says so.
 

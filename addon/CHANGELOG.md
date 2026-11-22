@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.2 (not released yet)
+
+Add-on:
+
+- A home charge with a negative electricity price (dynamic tariffs) is now stored. Before, the add-on refused the
+  session's last report, so the session stayed "charging now" with the energy of an earlier progress report.
+- A public charge reported several times by the Collector is kept as one session, extended by each report.
+
+Collector:
+
+- A public charge is one session, however often the car's data is refreshed while it charges. Before, every
+  refresh made a new session, and rises below 3 % between two refreshes were not counted at all. Charges that were
+  split this way can be fixed on the Charging page: edit the last part to cover the whole charge (start, battery %
+  from, kWh and price from the receipt) and delete the other parts. Both the add-on and the Collector need 1.1.2
+  for this.
+- Going back to Collector 1.1.1 after 1.1.2 keeps working.
+- One wrong odometer value from the car's cloud no longer stops trip recording. A rise the car cannot have driven
+  (more than 1500 km and faster than 200 km/h) is ignored. If the stored odometer was already wrong, the real value
+  takes over after three reports in a row.
+- Energy charged while Home Assistant or the charger's integration was down for hours or days is recorded again.
+  Since 1.0.1 it could be taken for standby use and dropped.
+- A charge that stays below the smallest session (default 0.2 kWh) no longer leaves a session that is "charging
+  now" forever in the add-on. Such sessions from before can be deleted on the Charging page.
+- The battery % at the end of a home charge is no longer taken from a report after the next drive. That made the
+  learned *kWh per %* too high. Sessions with such a value can be corrected on the Charging page (battery % to).
+
 ## Collector 1.1.1
 
 - A trip to a place outside your Home Assistant zones is now a one-way trip with that place as its end. Before, the
